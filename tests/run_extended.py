@@ -6,6 +6,7 @@ import uuid
 
 from integration_support import (
     COMPOSE,
+    approve,
     checked,
     connect,
     eventually,
@@ -61,6 +62,7 @@ def main():
     prefs.update(computer_auto=True)
     checked(c.put("/api/settings", json=prefs))
     task = checked(c.post("/api/tasks", json={"content": "fixture-wait"}))
+    approve(c, task["id"], "run_command")
     eventually(
         lambda: any(
             a["status"] == "executing" for a in checked(c.get("/api/tasks/" + task["id"]))["actions"]

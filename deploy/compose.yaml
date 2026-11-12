@@ -1,7 +1,7 @@
 name: shinbot
 services:
   control:
-    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a1-control
+    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a2-control
     build: {context: .., dockerfile: deploy/Dockerfile, target: control}
     init: true
     restart: unless-stopped
@@ -22,7 +22,7 @@ services:
     cap_drop: [ALL]
     networks: [runtime-net, computer-net, browser-net, channel-net]
   runtime:
-    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a1-runtime
+    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a2-runtime
     build: {context: .., dockerfile: deploy/Dockerfile, target: runtime}
     init: true
     restart: unless-stopped
@@ -35,7 +35,7 @@ services:
     networks: [runtime-net]
     extra_hosts: ["host.docker.internal:host-gateway"]
   computer:
-    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a1-computer
+    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a2-computer
     build: {context: .., dockerfile: deploy/Dockerfile, target: computer}
     init: true
     restart: unless-stopped
@@ -49,7 +49,7 @@ services:
     mem_limit: 2g
     networks: [computer-net]
   browser:
-    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a1-browser
+    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a2-browser
     build: {context: .., dockerfile: deploy/Dockerfile, target: browser}
     init: true
     restart: unless-stopped
@@ -63,7 +63,7 @@ services:
     networks: [browser-net]
   telegram:
     profiles: [telegram]
-    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a1-telegram
+    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a2-telegram
     build: {context: .., dockerfile: deploy/Dockerfile, target: telegram}
     init: true
     restart: unless-stopped

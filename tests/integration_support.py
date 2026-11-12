@@ -123,7 +123,10 @@ def ready(client):
 
 def fixture_settings(client, **changes):
     settings = checked(client.get("/api/settings"))
-    settings.update(provider="custom-fixture", model="fixture", computer_auto=False, browser_auto=True)
+    settings.update(
+        provider="custom-fixture", model="fixture", computer_auto=False, browser_auto=True,
+        approval_mode="auto",
+    )
     settings.update(changes)
     checked(client.put("/api/settings", json=settings))
     return settings
@@ -145,6 +148,13 @@ def wait(client, task_id, status="completed", timeout=60):
         return eventually(reached, f"task {task_id} to become {status}", timeout=timeout)
     except AssertionError as exc:
         raise AssertionError(f"{exc}; last task: {json.dumps(last)}") from exc
+
+
+def approve(client, task_id, tool):
+    task = wait(client, task_id, "waiting")
+    pending = [action for action in task["actions"] if action["status"] == "pending"]
+    assert len(pending) == 1 and pending[0]["tool"] == tool, pending
+    checked(client.post(f"/api/actions/{pending[0]['id']}/decision", json={"approved": True}))
 
 
 def install_echo_plugin(client):

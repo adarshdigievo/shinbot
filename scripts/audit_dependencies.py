@@ -3,17 +3,38 @@
 import argparse
 import concurrent.futures
 import json
+import sys
+import time
 import tomllib
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def registry_json(url):
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(url, timeout=30) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 429 and not 500 <= exc.code < 600:
+                raise
+            error = exc
+            exc.close()
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            error = exc
+        if attempt == 2:
+            raise RuntimeError(f"Dependency audit could not fetch {url} after 3 attempts: {error}") from error
+        delay = 2**attempt
+        print(f"Retrying {url} in {delay}s after {error}", file=sys.stderr, flush=True)
+        time.sleep(delay)
+
+
 def python_package(package):
     name, version = package["name"], package["version"]
-    with urllib.request.urlopen(f"https://pypi.org/pypi/{name}/{version}/json", timeout=30) as response:
-        data = json.load(response)
+    data = registry_json(f"https://pypi.org/pypi/{name}/{version}/json")
     info = data["info"]
     return {
         "ecosystem": "pypi",

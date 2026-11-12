@@ -240,7 +240,7 @@ with tempfile.TemporaryDirectory(prefix="shinbot-local-") as temporary:
         assert "Reminder saved" in clicked["content"][0]["text"]
         checked(b.post("/takeover", json={"owner": "test-owner", "browser_id": "shared"}))
         assert b.post("/execute", json=browser_action("click", selector="button")).status_code == 423
-        checked(b.post("/release", json={}))
+        checked(b.post("/release", json={"owner": "test-owner"}))
         assert b.post("/execute", json=browser_action("click", selector="button")).status_code == 400
         checked(b.post("/execute", json=browser_action("observe")))
         checked(b.post("/agent/release", json={"task_id": "browser-routine"}))

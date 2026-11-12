@@ -2,7 +2,7 @@
 
 import json
 
-from integration_support import checked, connect, fixture_settings, ready, wait
+from integration_support import approve, checked, connect, fixture_settings, ready, wait
 
 
 def main():
@@ -16,6 +16,8 @@ def main():
     for prompt in ["hello fixture", "fixture-note", "fixture-write", "fixture-browser"]:
         response = client.post("/api/tasks", json={"content": prompt})
         response.raise_for_status()
+        if prompt == "fixture-write":
+            approve(client, response.json()["id"], "write_file")
         task = wait(client, response.json()["id"])
         assert task["messages"][-1]["answer"], task
         print(f"PASS {prompt}: {task['status']}")

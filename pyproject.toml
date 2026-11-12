@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "shinbot"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "A self-hosted personal assistant powered by Pi Durable"
 readme = "README.md"
 license = "MIT"

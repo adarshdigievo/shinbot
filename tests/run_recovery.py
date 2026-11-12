@@ -45,7 +45,7 @@ def count(marker):
 def main():
     client = connect()
     ready(client)
-    fixture_settings(client, computer_auto=True)
+    fixture_settings(client, computer_auto=True, approval_mode="full")
 
     def start(delay=0):
         marker = uuid.uuid4().hex
@@ -157,7 +157,7 @@ def main():
     assert result["actions"][0]["id"] == original
     print("PASS runtime/gateway partition and runtime restart preserve the approved action ID", flush=True)
 
-    fixture_settings(client, computer_auto=True)
+    fixture_settings(client, computer_auto=True, approval_mode="full")
     task, marker = start(120)
     eventually(lambda: count(marker) == 1, "effect before executor crash")
     compose("kill", "-s", "SIGKILL", "computer")

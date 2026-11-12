@@ -8,7 +8,9 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import httpx
@@ -18,13 +20,37 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = Path("tmp/reference/implementation/screenshots")
 OUT.mkdir(parents=True, exist_ok=True)
 
+runtime_providers = None
+
+
+class FixtureRuntime(BaseHTTPRequestHandler):
+    def do_GET(self):
+        available = self.path == "/v1/providers" and runtime_providers is not None
+        body = json.dumps(runtime_providers if available else {"detail": "Fixture unavailable"}).encode()
+        self.send_response(200 if available else 503)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_args):
+        pass
+
+
 with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     url = f"http://localhost:{port}"
     env = {key: value for key, value in os.environ.items() if not key.startswith("SHINBOT_")}
-    env.update(SHINBOT_DATA=directory, SHINBOT_ORIGIN=url)
+    runtime = ThreadingHTTPServer(("127.0.0.1", 0), FixtureRuntime)
+    threading.Thread(target=runtime.serve_forever, daemon=True).start()
+    env.update(
+        SHINBOT_DATA=directory,
+        SHINBOT_ORIGIN=url,
+        SHINBOT_RUNTIME_URL=f"http://127.0.0.1:{runtime.server_port}",
+        SHINBOT_SERVICE_TOKEN=secrets.token_urlsafe(32),
+    )
     code = f"import uvicorn; from shinbot.app import create_app; from shinbot.config import Config; uvicorn.run(create_app(Config(coordinate=False)),host='127.0.0.1',port={port},access_log=False)"
     with open(Path(directory) / "server.log", "w") as log:
         process = subprocess.Popen([sys.executable, "-c", code], env=env, stdout=log, stderr=log)
@@ -381,34 +407,27 @@ with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
                     "PASS first-run template selection survives signup; unavailable services preserve settings and show useful browser recovery",
                     flush=True,
                 )
-                connected = False
-
-                def providers(route):
-                    route.fulfill(
-                        json=[
-                            {
-                                "id": "test",
-                                "name": "Test model",
-                                "configured": connected,
-                                "oauth": True,
-                                "models": [{"id": "test", "name": "Test model"}],
-                            },
-                            {
-                                "id": "other",
-                                "name": "Unrelated provider",
-                                "configured": True,
-                                "models": [{"id": "other", "name": "Other model"}],
-                            },
-                        ]
-                    )
+                runtime_providers = [
+                    {
+                        "id": "test",
+                        "name": "Test model",
+                        "configured": False,
+                        "oauth": True,
+                        "models": [{"id": "test", "name": "Test model"}],
+                    },
+                    {
+                        "id": "other",
+                        "name": "Unrelated provider",
+                        "configured": True,
+                        "models": [{"id": "other", "name": "Other model"}],
+                    },
+                ]
 
                 def save_key(route):
-                    global connected
                     assert json.loads(route.request.post_data)["key"] == "fixture-key"
-                    connected = True
+                    runtime_providers[0]["configured"] = True
                     route.fulfill(json={"ok": True})
 
-                page.route("**/api/providers", providers)
                 page.route("**/api/providers/key", save_key)
                 page.reload()
                 expect(page.get_by_role("button", name="Choose a model")).to_be_visible()
@@ -448,9 +467,13 @@ with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
                 page.locator('[data-view="chat"]').click()
                 expect(page.get_by_role("textbox", name="Message ShinBot", exact=True)).to_have_value(draft)
                 page.keyboard.press("ControlOrMeta+k")
-                search = page.get_by_role("dialog", name="Search your workspace", exact=True)
-                search.get_by_role("searchbox", name="Search your workspace", exact=True).fill("Researcher")
-                search.get_by_role("searchbox").press("Enter")
+                search = page.get_by_role("dialog", name="Search chats", exact=True)
+                search.get_by_role("searchbox", name="Search chats", exact=True).fill("No matching fixture chat")
+                expect(search).to_contain_text("No matching chats")
+                search.get_by_role("searchbox").press("Escape")
+                expect(search).to_have_count(0)
+                expect(page.get_by_role("textbox", name="Message ShinBot", exact=True)).to_have_value(draft)
+                page.locator('[data-sidebar-bot]').filter(has_text="Researcher").click()
                 expect(page.get_by_role("textbox", name="Message Researcher", exact=True)).to_have_value("Draft for my research bot")
                 page.locator('[data-view="settings"]').click()
                 page.get_by_role("tab", name="Workspace", exact=True).click()
@@ -464,7 +487,7 @@ with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
                 workspace_name.fill(original_name)
                 page.get_by_role("tab", name="Permissions", exact=True).click()
                 page.get_by_role("tab", name="Permissions", exact=True).press("ArrowLeft")
-                expect(page.get_by_role("tab", name="Connections", exact=True)).to_be_focused()
+                expect(page.get_by_role("tab", name="Browser", exact=True)).to_be_focused()
                 page.get_by_role("tab", name="Workspace", exact=True).click()
                 expect(workspace_name).to_have_value(original_name)
                 print("PASS per-bot drafts, keyboard search, settings tab state and hidden-field validation", flush=True)
@@ -644,7 +667,7 @@ with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
                 page.route("**/api/login", login_reply)
                 page.route("**/api/login/respond", lambda route: route.fulfill(json={"ok": True}))
                 page.get_by_role("tab", name="Connections", exact=True).click()
-                page.get_by_role("button", name="Test model", exact=True).click()
+                page.get_by_role("button", name="Sign in with Test model", exact=True).click()
                 auth_dialog = page.get_by_role("dialog", name="Connect your account", exact=True)
                 expect(auth_dialog.get_by_label("Callback URL", exact=True)).not_to_be_visible()
                 auth_dialog.get_by_text("Having trouble returning from sign-in?", exact=True).click()
@@ -715,6 +738,7 @@ with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
                     response = route.fetch()
                     task = response.json()
                     polls.append(task["id"])
+                    task["messages"][-1]["status"] = "running"
                     task.update(
                         status="running",
                         progress={"text": f"Streaming segment {len(polls)}"},
@@ -770,7 +794,7 @@ with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
                 expect(page.locator("main")).to_have_attribute("inert", "")
                 expect(page.get_by_role("complementary", name="Workspace navigation").get_by_role("button", name="Close navigation", exact=True)).to_be_focused()
                 page.keyboard.press("ControlOrMeta+k")
-                expect(page.get_by_role("dialog", name="Search your workspace", exact=True)).to_be_visible()
+                expect(page.get_by_role("dialog", name="Search chats", exact=True)).to_be_visible()
                 page.keyboard.press("Escape")
                 expect(page.get_by_role("dialog")).to_have_count(0)
                 expect(page.locator(".sidebar")).to_have_class("sidebar open")
@@ -789,3 +813,5 @@ with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
         finally:
             process.terminate()
             process.wait(timeout=10)
+            runtime.shutdown()
+            runtime.server_close()

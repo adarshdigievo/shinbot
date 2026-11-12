@@ -9,6 +9,7 @@ from integration_support import (
     ROOT,
     STATE,
     URL,
+    approve,
     checked,
     connect,
     eventually,
@@ -83,10 +84,19 @@ git('-c','user.name=Fixture','-c','user.email=fixture@example.test','-c','commit
                 },
             )
         )
+        # Auto mode pauses both file-writing commands until the owner approves them.
+        tasks = [first["task_id"], second["id"]]
+        for task_id in tasks:
+            wait(client, task_id, "waiting")
+        for task_id in tasks:
+            approve(client, task_id, "run_command")
         eventually(
             lambda: all(
-                checked(client.get("/api/tasks/" + key))["status"] == "running"
-                for key in [first["task_id"], second["id"]]
+                any(
+                    action["status"] == "executing"
+                    for action in checked(client.get("/api/tasks/" + key))["actions"]
+                )
+                for key in tasks
             ),
             "two concurrent worktree tasks",
         )
@@ -133,6 +143,7 @@ git('-c','user.name=Fixture','-c','user.email=fixture@example.test','-c','commit
             ),
             "delegated child worktree",
         )
+        approve(client, child["task_id"], "run_command")
         wait(client, child["task_id"])
         result = eventually(
             lambda: next(
