@@ -1,0 +1,34 @@
+---
+title: "Notes and memory"
+guide-section: "Using ShinBot"
+execute:
+  enabled: false
+---
+
+Open **Notebook** for two different kinds of saved information.
+
+## Notes
+
+Notes are editable pages shared by all bots. Create a note, give it a title and save its contents. Ask ShinBot to draft a plan, keep research findings or update an existing note. Notes persist between conversations and service restarts.
+
+From the CLI:
+
+```sh
+shinbot notes list
+shinbot notes list --query "weekly plan"
+shinbot notes add "Weekly plan" "Finish the outline before Friday."
+```
+
+## Memory
+
+Memory stores selected personal facts for the active bot, such as a writing preference or a recurring constraint. A saved fact is separate from the model's current context and from a normal notebook page. New installations let bots remember clear preferences and corrections you share.
+
+**Remember preferences and corrections I share without asking each time** is on by default in **Settings → Permissions**. Turn it off to require approval for new memories. Existing saved facts remain available until you delete them. For example, a bot can remember that you prefer short answers without a separate “remember this” request. It should tell you what it saved. Learning depends on the model calling the memory tool; a chat reply alone does not save a fact.
+
+Preference learning is separate from **reusable skills**. Bots can propose a procedure after testing it, with links to successful tool actions. A learned skill is staged as a versioned plugin for review. Activation follows your extension permissions. You can disable it or activate a previous version in Plugins.
+
+Review saved facts in the Memory tab and remove anything you no longer want the bot to use. Forgetting a fact does not erase mentions in old conversations, notes or backups.
+
+## Storage
+
+Notes are also saved as Markdown. [Installation backups](30-backups-and-upgrades.qmd) include both notes and memories.

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="ShinBot is a self-hosted personal assistant with a browser, memory and scheduled tasks. Run it on your computer or server, with the model you choose.">
+  <meta name="theme-color" content="#ffffff">
+  <meta property="og:title" content="ShinBot · Your assistant. On your machine.">
+  <meta property="og:description" content="Browse the web, keep useful notes and take care of recurring tasks. An open-source personal assistant with the model and tools you choose.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://adarshdigievo.github.io/shinbot/">
+  <meta property="og:image" content="https://adarshdigievo.github.io/shinbot/assets/logo.png">
+  <link rel="canonical" href="https://adarshdigievo.github.io/shinbot/">
+  <link rel="icon" href="assets/favicon.png?v=20261028" type="image/png" sizes="64x64">
+  <link rel="preload" href="assets/fonts/figtree.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <script src="site.js" defer></script>
+  <title>ShinBot · Your assistant. On your machine.</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="brand" href="./" aria-label="ShinBot home"><img src="assets/shinbot-icon.png" width="40" height="40" alt=""><span>ShinBot</span></a>
+    <nav aria-label="Main navigation"><a class="section-link" href="#features">What it does</a><a href="docs/">Docs</a><a href="https://github.com/adarshdigievo/shinbot">GitHub<img src="assets/icons/arrow-up-right.svg" width="15" height="15" alt=""></a></nav>
+  </header>
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <h1 id="hero-title">Your assistant.<br>On your machine.</h1>
+      <div class="hero-detail">
+        <p>Browse the web, keep useful notes and take care of recurring tasks. ShinBot runs on your computer or server, with the model you choose.</p>
+        <a class="button primary" href="#get-started">Install ShinBot<img src="assets/icons/arrow-up-right.svg" width="17" height="17" alt=""></a>
+        <span class="hero-meta">Open source. Self-hosted. Yours to change.</span>
+      </div>
+    </section>
+
+    <section class="product wrap" aria-label="See ShinBot in use">
+      <div class="preview-toolbar">
+        <div class="preview-tabs" role="tablist" aria-label="Explore ShinBot">
+          <button type="button" role="tab" id="tab-chat" aria-selected="true" aria-controls="preview-chat" tabindex="0">Conversations</button>
+          <button type="button" role="tab" id="tab-notebook" aria-selected="false" aria-controls="preview-notebook" tabindex="-1">Notebook</button>
+          <button type="button" role="tab" id="tab-jobs" aria-selected="false" aria-controls="preview-jobs" tabindex="-1">Scheduled jobs</button>
+        </div>
+        <span class="preview-note">A look inside ShinBot</span>
+      </div>
+      <div role="tabpanel" id="preview-chat" aria-labelledby="tab-chat" tabindex="0">
+        <a class="app-preview" href="assets/chat.jpg" target="_blank" rel="noopener" aria-label="Open the conversation screenshot at full size"><img src="assets/chat.jpg" width="1440" height="960" alt="ShinBot conversation with a proposal plan, bot profiles in the sidebar and a message composer" fetchpriority="high"></a>
+        <p class="caption"><span>One place for your bots and their conversations.</span><span><a href="assets/chat.jpg" target="_blank" rel="noopener">View full size</a></span></p>
+      </div>
+      <div role="tabpanel" id="preview-notebook" aria-labelledby="tab-notebook" tabindex="0" hidden>
+        <a class="app-preview" href="assets/notebook.jpg" target="_blank" rel="noopener" aria-label="Open the notebook screenshot at full size"><img src="assets/notebook.jpg" width="1440" height="960" alt="ShinBot notebook with saved pages and an editable note" loading="lazy"></a>
+        <p class="caption"><span>Keep the useful work in notes you can edit.</span><span><a href="assets/notebook.jpg" target="_blank" rel="noopener">View full size</a></span></p>
+      </div>
+      <div role="tabpanel" id="preview-jobs" aria-labelledby="tab-jobs" tabindex="0" hidden>
+        <a class="app-preview" href="assets/jobs.jpg" target="_blank" rel="noopener" aria-label="Open the scheduled jobs screenshot at full size"><img src="assets/jobs.jpg" width="1440" height="960" alt="ShinBot scheduled routines with their next run times and history" loading="lazy"></a>
+        <p class="caption"><span>Set a routine and check back on what it did.</span><span><a href="assets/jobs.jpg" target="_blank" rel="noopener">View full size</a></span></p>
+      </div>
+    </section>
+
+    <section class="features wrap section-space" id="features" aria-labelledby="features-title">
+      <div class="section-intro"><h2 id="features-title">For the things <br>you do every day.</h2><p>Research a purchase. Prepare a brief. Keep a project moving. Start a conversation and give your bot the tools it needs.</p><a class="text-link" href="docs/user-guide/first-steps.html">Try a first task</a></div>
+      <dl class="feature-list">
+        <div><dt>A browser you can share</dt><dd>Watch your bot use websites, take over when needed, and keep your sign-ins between tasks. Browser profiles can belong to one bot or be shared.</dd></div>
+        <div><dt>A memory you can edit</dt><dd>Let a bot remember your preferences and corrections. Review or forget saved facts, and keep longer work in the notebook.</dd></div>
+        <div><dt>Routines that keep running</dt><dd>Schedule recurring tasks or track a longer goal on the board. See each run, its result and its limits. Your server keeps the work going.</dd></div>
+        <div><dt>Different bots for different jobs</dt><dd>Give each bot a role and a model. Start from a template, make it your own, or share a bot group with someone else.</dd></div>
+      </dl>
+    </section>
+
+    <section class="extensions" id="extend" aria-labelledby="extend-title"><div class="wrap">
+      <div class="extension-heading"><h2 id="extend-title">Add what you need.</h2><p>Connect a tool, teach a procedure, or ask ShinBot to build an extension. Keep it for one bot or share it across your bots.</p></div>
+      <div class="extension-links">
+        <article><h3>Plugins &amp; MCP</h3><p>Connect GitHub, Telegram and other tools. Add an MCP server or a plugin repository of your own.</p><a class="text-link" href="docs/user-guide/plugins.html">Connect your tools</a></article>
+        <article><h3>Skills</h3><p>Install skills with <code>npx skills</code>. Bots can also propose reusable procedures from work they have tested.</p><a class="text-link" href="docs/user-guide/plugins.html#install-agent-skills">Work with skills</a></article>
+        <article><h3>Bot templates</h3><p>Save a useful setup as a template. Share individual bots or a group with its roles and browser settings.</p><a class="text-link" href="docs/user-guide/bots-and-templates.html">Explore templates</a></article>
+      </div>
+    </div></section>
+
+    <section class="ownership wrap section-space" aria-labelledby="ownership-title">
+      <h2 id="ownership-title">You choose the access.</h2>
+      <div class="ownership-copy"><p>Set which tools can act without asking. Review pending actions in the conversation, inspect an extension before activating it, and take control of the browser whenever you need to.</p><p>Conversations, files, memories and browser profiles stay on your server. Your chosen model provider receives the context needed for each task. You can also connect a compatible local model.</p><a class="text-link" href="docs/user-guide/backups-and-upgrades.html">Back up your data and roll back updates</a></div>
+    </section>
+
+    <section class="install wrap" id="get-started" aria-labelledby="install-title">
+      <div class="install-top"><h2 id="install-title">Make yourself at home.</h2><a class="text-link" href="docs/user-guide/installation.html">Read the installation guide<img src="assets/icons/arrow-up-right.svg" width="17" height="17" alt=""></a></div>
+      <p class="install-intro">Start Docker, then run this in your terminal. ShinBot opens in your browser.</p>
+      <div class="command"><code id="install-command">uvx --prerelease allow shinbot start</code><button type="button" id="copy-install" aria-label="Copy installation command"><img src="assets/icons/copy.svg" alt="" width="19" height="19"><span>Copy</span></button></div>
+      <div class="install-meta"><p>Linux and macOS. Requires <a href="https://docs.astral.sh/uv/getting-started/installation/">uv</a>, Python 3.13+ and Docker Compose.</p><p id="copy-status" role="status" aria-live="polite"></p></div>
+      <ol class="setup-steps"><li><strong>Choose a password.</strong><span>Claim your installation from its one-time setup link.</span></li><li><strong>Connect a model.</strong><span>Use an API key, supported sign-in or compatible endpoint.</span></li><li><strong>Give it a first task.</strong><span>Pick a template or tell ShinBot what you need help with.</span></li></ol>
+      <details class="under-the-hood"><summary>What runs under the hood?</summary><div><p>Six parts: an agent powered by Pi Durable, a Python gateway, a Computer with a persistent browser, a notebook, scheduled jobs and plugins.</p><p>Docker keeps the services together. Your data survives package reinstalls. Scheduled work needs the host to stay running, and model access is separate from ShinBot.</p><a class="text-link" href="docs/developers/architecture.html">Read the architecture</a></div></details>
+    </section>
+  </main>
+  <footer class="wrap"><a class="brand" href="./" aria-label="ShinBot home"><img src="assets/shinbot-icon.png" width="32" height="32" alt=""><span>ShinBot</span></a><nav aria-label="Footer"><a href="docs/">Documentation</a><a href="docs/developers/development.html">Contribute</a><a href="docs/reference/licenses.html">Licenses</a><a href="https://github.com/adarshdigievo/shinbot">GitHub</a></nav></footer>
+</body>
+</html>

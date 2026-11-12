@@ -1,0 +1,54 @@
+---
+title: Configuration and data
+execute:
+  enabled: false
+---
+
+Configure model providers, permissions, budgets and appearance in **Settings**. Configure a bot's role, starter prompts, browser sharing and optional model override from **Home**.
+
+## Launcher settings
+
+The launcher stores installation details in `~/.shinbot/deploy.env` and CLI connection details in `~/.shinbot/client.json`. These files are private and may contain credentials. Do not commit or paste them into an issue.
+
+| Setting | Purpose |
+| --- | --- |
+| `SHINBOT_HOME` | Override the launcher's directory; set this in the host environment before running the CLI |
+| `SHINBOT_PORT` | Published gateway port; defaults to `8765` |
+| `SHINBOT_BIND` | Published bind address; defaults to `127.0.0.1` |
+| `SHINBOT_ORIGIN` | Exact browser-facing origin, including scheme and non-default port |
+| `SHINBOT_PROJECT` | Saved Compose project identity; do not change it during an upgrade |
+| `SHINBOT_DOCKER_CONTEXT` | Saved Docker context; use the same engine for an existing installation |
+| `SHINBOT_IMAGE` | Override the image repository while preserving the versioned service tags |
+| `SHINBOT_SAFE_MODE` | Set to `1` to hold background execution while inspecting an installation |
+| `SHINBOT_COMPOSE_FILE` | Advanced host override for a custom Compose file |
+
+The launcher generates internal service tokens and saves the engine identity. Keep those values intact. Do not expose internal runtime, Computer, browser or VNC ports. For remote access and TLS, follow the [server access guide](../user-guide/remote-access.html).
+
+Restart with `shinbot start` after editing deployment settings. After a rollback, ShinBot uses its saved service snapshot; run `shinbot update` with the intended launcher release to apply deployment changes. A custom port must agree with `SHINBOT_ORIGIN` and the address used in the browser.
+
+## Persistent data
+
+| Location | Contents |
+| --- | --- |
+| Launcher home | Deployment configuration, service credentials and CLI session |
+| `control-data` volume | SQLite application state, notes, plugins and artifacts |
+| `runtime-data` volume | Agent state and model provider credentials |
+| `computer-data` volume | Computer execution journal and plugin state |
+| `browser-data` volume | Persistent browser profiles and browser execution journal |
+| `workspace` volume | Files used by tools and commands |
+
+Compose prefixes volume names with the saved project name. Removing or reinstalling the Python package does not delete these locations. Deleting volumes, changing Docker engines or removing the launcher home can break that continuity. Use [backup and restore](../user-guide/backups-and-upgrades.html) to move an installation.
+
+## Defaults and scope
+
+ShinBot has one owner account. Bot profiles are roles within that account, not separate security principals. Notes and workspace files are shared; memories and conversations belong to their bots. Browser sharing is explicit.
+
+New installations start with preference memory on, optional token caps off, no selected model, and no installed plugins. Choose a model during setup or in Settings; bot profiles can override it. Existing saved choices remain intact when ShinBot is upgraded.
+
+Setup suggests the browser’s timezone. Change it in **Settings → Workspace**. ShinBot stores timestamps as UTC instants and displays them in the selected timezone, including chats, jobs, notifications and Calendar. Each recurring job also keeps its scheduling timezone so daylight-saving changes follow that schedule.
+
+Appearance defaults to the system preference. Light, Dark and System choices are saved in that browser. Provider credentials and task data stay on the server; selected model providers receive the context needed for model calls.
+
+## HTTP integration
+
+The web app and CLI use the gateway API in `src/shinbot/app.py`. The HTTP API is an internal product interface and may change between versions. Prefer the CLI for automation and MCP plugins for new agent tools. Do not send internal service credentials from a browser or third-party client.

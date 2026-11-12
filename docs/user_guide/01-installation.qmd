@@ -1,0 +1,73 @@
+---
+title: "Install ShinBot"
+guide-section: "Getting started"
+execute:
+  enabled: false
+---
+
+## Requirements
+
+Use Linux or macOS, Python 3.13 or newer, and a running Docker-compatible engine with Docker Compose v2.
+
+The Python package provides the launcher and CLI. `shinbot start` runs the application services in Docker.
+
+## Install the release
+
+[Install uv](https://docs.astral.sh/uv/getting-started/installation/) if you do not have it, then run:
+
+```sh
+uv tool install --prerelease allow shinbot
+shinbot start
+```
+
+To install a specific release, use `uv tool install shinbot==VERSION` with the version from the [release page](https://github.com/adarshdigievo/shinbot/releases).
+
+For a one-command launch with uv already installed:
+
+```sh
+uvx --prerelease allow --from shinbot shinbot start
+```
+
+You can also use pip inside a virtual environment:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --pre shinbot
+shinbot start
+```
+
+The first start pulls the versioned service images from `adarshidigievo/shinbot`. Published images support `linux/amd64` and `linux/arm64`. The launcher generates private service credentials and opens `http://localhost:8765` with a setup link.
+
+## Build from source
+
+```sh
+git clone https://github.com/adarshdigievo/shinbot.git
+cd shinbot
+uv run --frozen shinbot start --build
+```
+
+Use the source path when developing ShinBot. It builds the same services from `deploy/Dockerfile` instead of relying on published images.
+
+## Headless or remote host
+
+Start without opening a browser:
+
+```sh
+shinbot start --no-open-browser
+shinbot setup-token
+```
+
+Connect through an [SSH tunnel](31-remote-access.qmd), open Home, and paste the installation token. Treat the token as a temporary installation credential. Do not share it or include it in screenshots.
+
+## Stop and check the services
+
+```sh
+shinbot status
+shinbot doctor
+shinbot stop
+```
+
+`stop` keeps your data. The services restart after a Docker engine restart, subject to the engine starting at boot. On a laptop, jobs cannot run while the host or its container VM is asleep.
+
+Continue with [first-time setup](02-first-steps.qmd).

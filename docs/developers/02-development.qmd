@@ -1,0 +1,112 @@
+---
+title: Develop and test
+execute:
+  enabled: false
+---
+
+## Set up a checkout
+
+Use Python 3.13 or newer, uv, Node.js 22 and Docker Compose. CI pins exact tool versions in `.github/workflows/ci.yml`.
+
+```sh
+git clone https://github.com/adarshdigievo/shinbot.git
+cd shinbot
+uv sync --frozen --extra computer --extra security --extra telegram
+npm --prefix runtime ci --ignore-scripts
+npm --prefix computer ci --ignore-scripts
+npm --prefix runtime run build
+node scripts/copy_web_assets.mjs
+uv run --frozen shinbot start --build
+```
+
+This starts a real installation. For disposable development and testing, use the integration runner below. Do not point tests at a personal installation or reuse its credentials.
+
+`shinbot serve` runs only the Python gateway. It is useful when working on that service, but it does not start Pi, the browser or the Computer.
+
+## Run checks
+
+```sh
+uv run --frozen ruff check src tests scripts
+uv run --frozen --extra computer --extra security --extra telegram pytest
+npm --prefix runtime run build
+npm --prefix runtime test
+npm --prefix runtime audit --audit-level=low
+npm --prefix computer audit --audit-level=low
+uv run --frozen python scripts/release.py check
+uv build --out-dir dist/check
+uv run --frozen python scripts/release.py check-wheel dist/check
+```
+
+Use an empty wheel output directory. CI checks the locked Node packages for published advisories; the release workflow also checks locked Python packages through PyPI. These checks do not replace license reviews or platform audits. The packaging check verifies metadata, every web asset and the bundled release Compose file. Vendored browser libraries come from the pinned runtime dependencies; run `node scripts/copy_web_assets.mjs` after changing their versions and review the resulting files and license notices.
+
+The browser-only suite starts an isolated gateway with fixture data:
+
+```sh
+uv run --frozen playwright install chromium
+uv run --frozen python tests/run_onboarding.py
+```
+
+On Linux, install browser system dependencies with `playwright install --with-deps chromium` where administrative access is available.
+
+## Exercise services without Docker
+
+```sh
+uv run --frozen --extra computer --extra security python tests/run_local_services.py
+```
+
+This runner starts the gateway, Pi Durable, Computer, Chromium and a deterministic model fixture on localhost. It checks tool dispatch, learned skills, memory refresh, browser forms and takeover, Kanban continuation, service restarts, and the UI in light, dark and mobile layouts. It records idle CPU and memory samples and writes screenshots under `tmp/reference/production/local-services/`.
+
+The runner enables the development Computer executor in a temporary workspace. It does not load personal credentials, test Linux container isolation, or measure production model quality. Run the container journeys before releasing images.
+
+The attachment journey runs the Pi runtime, Computer and Camoufox with a deterministic model. It checks file creation, screenshot delivery, authenticated downloads, automatic browser cleanup and restart recovery:
+
+```sh
+uv sync --frozen --extra computer --extra browser --extra security
+uv run --no-sync python -m camoufox fetch official/stable/156.0.1-beta.36
+uv run --no-sync python tests/run_attachments.py
+```
+
+On Linux, run `uv run --no-sync playwright install-deps firefox` before the Camoufox journey.
+
+## Container integration tests
+
+Build the images from the checkout, then run the isolated journeys:
+
+```sh
+version=$(uv run --frozen python -c 'from shinbot import __version__; print(__version__)')
+for service in control runtime computer browser telegram; do
+  docker buildx build --load --file deploy/Dockerfile --target "$service" \
+    --tag "shinbot-dev/shinbot:$version-$service" .
+done
+uv run --frozen python tests/run_e2e.py
+```
+
+The runner creates a temporary home, a unique Compose project and a separate localhost port. It uses a local model fixture and removes only its own containers and volumes. It checks chat, approvals, plugins, compaction, scheduled jobs, browser profiles, backup/restore and wheel uninstall/reinstall. It does not test a paid provider's live sign-in or account eligibility.
+
+Use `--only ui` or `--only reinstall` to run one journey. `--prepare-only` leaves an isolated app available for manual testing and prints its URL and cleanup command. Individual journey scripts require the runner's context and reject the default personal project and port.
+
+These builds use `shinbot-dev/shinbot` tags, separate from the published image tags a personal installation uses. The test runner saves that image repository in its isolated deployment. Use `--image-repository NAME` if you built a different local image set. CI uses the same build loop in its `Container integration` job.
+
+## Build the website
+
+The custom landing page lives in `site/`. Great Docs builds the authored guides from `docs/` using `great-docs.yml`. Install [Quarto](https://quarto.org/docs/get-started/) at the version used in `site-build.yml`, then run:
+
+```sh
+uv sync --frozen --group docs
+uv run --frozen --group docs python scripts/build_site.py
+uv run --frozen --group docs python scripts/check_site.py
+uv run --frozen --group docs playwright install chromium
+uv run --frozen --group docs python tests/run_site.py
+```
+
+The assembled site is `_site/`: its root is the landing page and its `docs/` directory contains Great Docs output. `great-docs/` and `_site/` are generated and ignored. Edit the source pages, not generated HTML. The link checker checks the rendered pages and assets, including GitHub Pages' `/shinbot/` prefix.
+
+The website browser check exercises screenshot tabs, command copying, documentation search, theme persistence and mobile navigation. It saves review images under `test-results/site/`.
+
+Great Docs is a development dependency and is not installed by `pip install shinbot`.
+
+## Contributing a change
+
+Describe the user-visible problem and how to reproduce it. Keep changes focused and add a behavioral test when it protects a real failure mode. Include rendered screenshots for interface changes and verify narrow screens, keyboard access, and both themes.
+
+Keep new dependencies small and review their full dependency graph and licenses. Use upstream packages unchanged. Update the relevant user guide when a command, setting or workflow changes. Avoid putting credentials, private task transcripts or generated test data in a pull request.

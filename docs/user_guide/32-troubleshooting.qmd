@@ -1,0 +1,40 @@
+---
+title: "Troubleshooting"
+guide-section: "Operating your server"
+execute:
+  enabled: false
+---
+
+Start with `shinbot status` and `shinbot doctor` on the installation host. Keep error messages when reporting a problem, but remove API keys, tokens, callback URLs and private conversation content.
+
+## Docker is unavailable
+
+Start your container engine and check that Docker Compose v2 is installed. On macOS, wait for the container VM to finish starting. Use the same Docker context that originally held your data.
+
+## The launcher reports a changed engine or missing volume
+
+Do not delete `deploy.env` to silence the error. Switch back to the original Docker context or restore a backup. The check prevents an empty replacement installation from appearing to have lost your conversations.
+
+## Home asks for an installation token
+
+Run `shinbot setup-token` on the host. Paste that value into Home. A setup link supplied by a normal local first start includes it automatically.
+
+## A model is unavailable
+
+Check the selected provider and model in Settings. Add credentials in Connections or finish the supported sign-in flow. For a local model, test whether its endpoint is reachable from the runtime container; the host's `localhost` is not the runtime container's `localhost`.
+
+## Computer cannot show the browser
+
+Retry the view and check the browser service. Keep its VNC and internal API ports private. If the page loads through a reverse proxy but live view fails, check WebSocket forwarding.
+
+## A job did not run
+
+Check its enabled state, timezone, next run and history. Confirm the host and Docker VM were awake. A restored installation pauses jobs until you release recovery and re-enable them. An active run may be waiting for approval.
+
+## A plugin is not available in a conversation
+
+Confirm it is activated and start a new conversation. Existing conversations retain their pinned plugin versions. Review validation errors for an invalid manifest, unexpected MCP tools or files missing from the package list.
+
+## Report an issue
+
+Include the ShinBot version, OS, Docker engine/context, installation method and exact steps. Say whether the failure happened in the UI, CLI or a scheduled run. Use [GitHub issues](https://github.com/adarshdigievo/shinbot/issues) for reproducible bugs. Do not attach a full backup; it contains credentials and private data.

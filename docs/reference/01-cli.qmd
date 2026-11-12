@@ -1,0 +1,94 @@
+---
+title: CLI commands
+execute:
+  enabled: false
+---
+
+Run `shinbot --help` for the installed command list. Each command and group accepts `--help`. Chat and configuration commands use the same gateway as the web app. Installation, backup and recovery commands run on the host and can work while the gateway is unavailable.
+
+## Installation and recovery
+
+| Command | Purpose |
+| --- | --- |
+| `shinbot start` | Start the versioned Docker services and open the web app |
+| `shinbot start --no-open-browser` | Start on a headless host |
+| `shinbot start --build` | Build service images from a source checkout |
+| `shinbot setup-token` | Print the unclaimed installation's one-time setup token |
+| `shinbot status` | Show Compose service status |
+| `shinbot doctor` | Check the gateway and connected services |
+| `shinbot stop` | Stop services while keeping data volumes |
+| `shinbot backup PATH` | Back up host settings, plugins and all persistent volumes |
+| `shinbot backup-info PATH` | Verify an archive without exposing its credentials |
+| `shinbot update --check` | Check GitHub and PyPI for a stable release |
+| `shinbot update --latest` | Upgrade a supported launcher and apply the matching service release |
+| `shinbot update` | Apply the installed package’s release with a restore point and health checks |
+| `shinbot update --build` | Build and apply a source release with the same recovery checks |
+| `shinbot rollback` | Restore the previous release and its data after an update |
+| `shinbot restore PATH --replace` | Back up existing data and restore an archive under a recovery hold |
+| `shinbot version` | Print the package version |
+
+## Conversations and notes
+
+```sh
+shinbot login
+shinbot login --url https://bot.example.com
+shinbot chat "Research a topic and save a note"
+shinbot chat "Continue with the next step" --task TASK_ID
+shinbot chat "Plan my day" --bot BOT_ID
+shinbot notes list --query "research"
+shinbot notes add "Packing list" "Passport, charger, notebook"
+```
+
+Login prompts for the password and stores a revocable bearer token in the launcher home. Avoid putting passwords or provider secrets in command arguments.
+
+When a task needs approval, the CLI prints the web app address and exits. Complete the approval in the web app; there is no CLI approval command.
+
+## Bots and jobs
+
+```sh
+shinbot bots list
+shinbot bots create "Researcher" --instructions "Keep a source list." --browser private
+shinbot bots export BOT_ID ./template.json
+shinbot bots import ./template.json
+shinbot bots add-repository your-name/your-bot-templates
+shinbot jobs list
+shinbot jobs add "Morning reading" "Find useful updates" "0 9 * * 1-5" --timezone Asia/Kolkata
+shinbot jobs pause JOB_ID
+```
+
+Use the web app to configure one-time and interval jobs, edit routines, manage groups and preview imported templates.
+
+## Plugins
+
+```sh
+shinbot marketplace add your-name/your-shinbot-plugins
+shinbot marketplace list
+shinbot plugins list
+shinbot plugins install /path/to/plugin
+shinbot plugins configure PLUGIN VERSION
+shinbot plugins activate PLUGIN_ID VERSION
+shinbot plugins disable PLUGIN_ID
+```
+
+The marketplace command accepts `--ref` when a specific repository ref is needed. Local installation stages a package; activation is a separate step. See [plugins](../user-guide/plugins.html) for installation, activation and access settings.
+
+### Optional Telegram plugin
+
+Use these commands to set up or stop the [official Telegram plugin](../user-guide/telegram.html):
+
+```sh
+shinbot telegram-setup
+shinbot telegram-stop
+```
+
+## MCP connections and skills
+
+| Command | Purpose |
+| --- | --- |
+| `shinbot plugins connect-mcp config.json --bot BOT_ID` | Connect and inspect a server from JSON configuration |
+| `shinbot plugins install-skills 'npx skills add owner/repo --skill NAME' MIT --bot BOT_ID` | Install skills inside Computer and stage them |
+| `shinbot plugins import-skill .agents/skills/NAME MIT --bot BOT_ID` | Import skills installed on the host |
+| `shinbot plugins access ID --shared` | Share an extension with all bots |
+| `shinbot plugins access ID --bot BOT_ID` | Limit an extension to selected bots; repeat `--bot` for more than one |
+
+Replace `MIT` with the upstream license. Omit `--bot` when setup should use shared access. After installation, review and activate the version in Plugins. See [Plugins, MCP and skills](../user-guide/plugins.html) for JSON fields and supported transports.

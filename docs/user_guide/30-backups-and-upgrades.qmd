@@ -1,0 +1,104 @@
+---
+title: "Data, backups and upgrades"
+guide-section: "Operating your server"
+execute:
+  enabled: false
+---
+
+## Where data lives
+
+| Location | Contents |
+| --- | --- |
+| `~/.shinbot` or `SHINBOT_HOME` | Launcher settings, connection details and service credentials |
+| `control-data` volume | SQLite task history, bots, notes, memories, jobs and plugin records |
+| `runtime-data` volume | Pi conversation state and provider credentials |
+| `computer-data` volume | Executor records and installed executable packages |
+| `workspace` volume | Files the Computer works with |
+| `browser-data` volume | Persistent browser profiles, cookies and sign-ins |
+
+The volume names are prefixed by the saved Compose project. Removing or reinstalling the Python package does not delete these locations. Keep the same OS account, `SHINBOT_HOME` and Docker context to reconnect to the same installation. The launcher rejects a changed engine or missing saved data volume instead of silently starting with empty data.
+
+## Back up
+
+```sh
+shinbot backup /safe/location/shinbot.tar.gz
+shinbot backup-info /safe/location/shinbot.tar.gz
+```
+
+Backup briefly stops the running services, saves all five volumes and restarts those services. It includes bots, preferences, learned skills, installed plugins and their versions, plugin settings and secrets, provider credentials, browser sign-ins, files and host deployment settings. CLI login sessions are excluded.
+
+The archive stores release metadata, but does not embed Docker images or the Python package. Keep a matching release available for a move to another host. Local update rollbacks use the retained Docker images.
+
+The archive uses owner-only permissions and checksums. It is **not encrypted**. Store it privately on another disk or host so it survives loss of this machine. `backup-info` checks the archive without changing the installation or printing credentials. Archives from older ShinBot versions remain readable, but those archives contain volumes only.
+
+## Upgrade with a restore point
+
+The launcher records the running release when you run `shinbot start`. Do this once before upgrading an existing launcher that has not recorded a release yet.
+
+Open **Settings → Updates** to see the installed gateway version, the latest verified stable release and release notes. ShinBot checks GitHub and PyPI daily; turn off **Check for updates daily** to use manual checks only. A missing release, network failure or publication still in progress appears as its own state. Checking never installs anything or sends your chats and settings.
+
+On the installation host, check without making changes:
+
+```sh
+shinbot update --check
+```
+
+To check, upgrade the launcher and apply the matching service release:
+
+```sh
+shinbot update --latest
+```
+
+This command supports uv tool installations and Python virtual environments. It checks the host's Python compatibility and installs the exact verified version using uv, or pip when uv is unavailable in a venv. It keeps the services running while the launcher and images are downloaded. It does not automatically downgrade. Run it in the host terminal, not a bot's Computer workspace. Copy the command from **Settings → Updates**.
+
+For other package-manager installations, upgrade the launcher with that manager, then run `shinbot update`. A uv tool installation can also use:
+
+```sh
+uv tool upgrade shinbot
+shinbot update
+```
+
+For pip, upgrade in the same environment with `python -m pip install --upgrade shinbot`, then run `shinbot update`. Use the package manager's prerelease option if you deliberately use a prerelease version.
+
+`shinbot update` applies the service images selected by the installed Python package. It:
+
+1. Downloads the images before stopping the current services. A failed download leaves the current services running.
+2. Saves a complete backup under `SHINBOT_HOME/backups` and retains the previous images locally.
+3. Starts the new services with automated work held and checks the gateway, runtime, Computer and Browser.
+4. Enables normal operation after those checks pass. If startup fails, it restores the previous images, configuration and data.
+
+For a source installation, update the checkout and run `uv run --frozen shinbot update --build`. Use `--timeout 300` if this host needs more than the default 120 seconds for each health check. Updating never removes your named volumes.
+
+The health check verifies service readiness, not every provider or plugin. Test your usual workflows after an update. Keep enough free disk space for the full backup and both releases. Do not prune retained Docker images while you need their rollback checkpoint.
+
+## Roll back
+
+```sh
+shinbot rollback
+```
+
+Rollback runs from the host CLI and does not need the web app, a model provider or an Internet connection. It returns to the last update's saved release **and data**. It first backs up work created after a successful update so that you can recover it separately. Older restore points remain in `SHINBOT_HOME/backups`; use `shinbot backup-info` to inspect them.
+
+If the host stops during an update, `shinbot start` reports the incomplete operation. Run `shinbot rollback` to finish recovery. If Docker or the disk is unavailable, resolve that problem and retry the same command. The checkpoint stays on disk until recovery completes. Running rollback again after success leaves the restored data alone.
+
+A rollback restores the services, not the Python package installed by uv or pip. It keeps a private Compose snapshot so subsequent starts use the restored services. Install a corrected launcher and run `shinbot update` when you are ready to try another release.
+
+## Restore a backup
+
+```sh
+shinbot restore /safe/location/shinbot.tar.gz --replace
+```
+
+Restore validates the archive before stopping services and saves the current state in `SHINBOT_HOME/backups`. It restores persistent data and plugin settings while preserving this destination's Docker engine, project, ports, public address and service credentials. The archive also contains the original deployment settings for reference; they are not blindly applied to another host.
+
+Restore revokes sessions, pauses schedules and changes the installation's execution identity. Sign in and inspect Recovery in Settings. Stop any old copy of the installation before releasing the recovery hold. Review uncertain actions and re-enable schedules individually. This also applies after an automatic update fallback or a manual rollback.
+
+### Move to a new host
+
+1. Install the same ShinBot version that created the backup, along with Docker and Compose.
+2. Run `shinbot start --no-open-browser` on the destination to create its deployment and volumes. You do not need to claim this empty installation.
+3. Copy the archive privately and run `shinbot restore /path/to/shinbot.tar.gz --replace`.
+4. Sign in with the restored account's password. Check conversations, plugins, files, provider access and browser profiles. Restart any optional plugin services you want to use on the new host, following their setup guides.
+5. Stop the old installation, inspect Recovery in Settings, release the hold and re-enable the schedules you want.
+
+Keep the original backup until you have checked the destination. An older package may not understand data written by a newer release. Use a matching release and backup when restoring or downgrading.

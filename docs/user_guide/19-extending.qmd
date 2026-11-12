@@ -1,0 +1,43 @@
+---
+title: "Extending ShinBot"
+guide-section: "Extending ShinBot"
+execute:
+  enabled: false
+---
+
+Add capabilities from **Plugins**, or use **Home** to create and share bot profiles. Extensions can be available to one bot or shared across your bots.
+
+## Choose what to add
+
+| You want to | Use |
+| --- | --- |
+| Connect a service or add executable tools | A [plugin](plugins.html#find-a-plugin) or [MCP server](plugins.html#connect-an-mcp-server) |
+| Add a sidebar app, theme or chat shortcut | A [UI extension](../developers/plugins.html#sidebar-apps-themes-and-ui-patches) |
+| Add chat context, check tool calls or handle finished replies | [Lifecycle hooks](../developers/plugins.html#chat-and-tool-hooks) |
+| Teach a repeatable procedure or writing style | A [skill](plugins.html#install-agent-skills) |
+| Reuse a bot's role, prompts and browser settings | A [bot template](bots-and-templates.html#start-from-a-template) |
+| Save a procedure a bot has tested | A [learned skill](plugins.html#learn-from-completed-work), reviewed before activation |
+
+## Install from a repository
+
+Open **Plugins** to browse the official marketplace, or choose **Add marketplace** to add a personal or community repository. Stage a package, review its files, configure any credentials, and activate it. Start a new conversation to use the active version.
+
+The [official plugin repository](https://github.com/adarshdigievo/shinbot-official-plugins) contains optional integrations. Each plugin has its own setup requirements. The [plugin guide](plugins.html) covers installation, MCP connections, skills and bot access.
+
+For templates, open a preview on Home and inspect the instructions and browser-sharing choices before importing. Add the [official template repository](https://github.com/adarshdigievo/shinbot-official-templates) or a repository of your own. Templates can contain an individual bot or a group.
+
+## Ask your bot to help
+
+Describe the capability and when you will use it:
+
+> Check the marketplace for a writing-style skill. If none fits, create one that uses short paragraphs and keeps source links. Show me the files before activation.
+
+ShinBot can search marketplaces, inspect packages, and write and test tools, sidebar apps, themes and hooks before staging them for review. It can also export a bot profile and save it as a local template. Setup and activation follow your permissions; enter credentials through the Plugins settings.
+
+## Build and share your own
+
+- [Write a plugin](../developers/plugins.html) for a skill, tool, UI contribution or workflow hook, then publish a marketplace repository.
+- [Publish bot templates](../developers/templates.html) for individual bots or groups, with validated profiles and a repository catalog.
+- [Share an existing bot](bots-and-templates.html#share-a-template) from Home or the CLI.
+
+Use your own repository for personal extensions, or submit a pull request to the official plugin or template repository. Include setup instructions, a license and a way to check that the extension works.

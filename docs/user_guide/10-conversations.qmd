@@ -1,0 +1,62 @@
+---
+title: "Conversations and approvals"
+guide-section: "Using ShinBot"
+execute:
+  enabled: false
+---
+
+A conversation belongs to a bot. Open an existing conversation from Recent chats or choose **New chat** to start another. Ask for an outcome, provide relevant context, and say which actions you want to review first.
+
+## Queue messages or steer the current task
+
+Messages sent while a bot is working wait above the message box. ShinBot processes them one at a time, in order. Each prompt enters the conversation when processing starts, followed by its response. The queue survives refreshes and service restarts.
+
+To change what the bot is doing now, write a message and choose **Steer**. You can also choose **Steer** beside a queued message. Steering takes priority over ordinary follow-ups and joins the current conversation at the next model or tool boundary. It does not stop an action already in progress or undo completed work. A pending approval still needs a decision. Use **Stop** to cancel the task and its queued messages.
+
+Steering keeps the current run’s token allowance; it does not reset an exhausted budget.
+
+## Choose a model and thinking effort
+
+Use the controls below the message box to choose a connected model and its thinking effort. The model list supports search. Effort choices depend on the model; models without an adjustable effort show **Thinking off**. Changes stay with this conversation and apply to your next message. Wait for an active reply to finish before changing its model or effort. Open **Settings** from the picker to connect providers or manage account details.
+
+## Watch work and approve actions
+
+ShinBot keeps responses and activity traces in conversation order. The approval control applies to the current chat:
+
+- **Auto** is the default. Routine navigation, page reading and recognized search controls proceed without repeated prompts. Destructive or unclear actions ask for a decision. Browser checks inspect the live element and its form, link and control metadata, then recheck before execution. These checks are conservative rules, not a guarantee that an arbitrary website is safe.
+- **Ask** requests approval before commands and browser actions. Eligible saved permissions still apply.
+- **Full access** runs actions without approval, including actions that can change or delete data. Choose it only for work you intend to run with that access. Human browser takeover, extension scans, plugin access restrictions and recovery holds still apply.
+
+A pending action shows its arguments and why it needs review. Choose **Allow once** or **Decline**. Actions eligible for standing permission also offer **Allow for this chat** and **Always allow**. Auto still requires a separate decision for destructive or unclear actions; a broad saved rule cannot bypass that check. A changed browser target needs another decision. Review or remove saved rules in **Settings → Permissions**, where you can also choose the default mode for new conversations.
+
+**Stop** cancels ongoing work where possible. An external action that already completed is not undone by stopping the conversation.
+
+## Optional usage caps
+
+Token caps are off by default. In **Settings → Workspace**, leave a cap blank for unlimited use, or set a per-message or rolling 24-hour cap. Each delegated conversation has its own per-message allowance. Use the rolling 24-hour cap to limit combined usage across bots and their delegated work. These are usage guardrails, not spending guarantees: in-flight model requests can exceed the remaining allowance. Kanban cards have a run limit and an optional total token budget, which is unlimited by default. Workspace caps still apply to their runs. Model context limits and automatic compaction apply independently of usage caps.
+
+## Prompt suggestions
+
+An empty message box offers a starter prompt or a follow-up based on the conversation. Press **Tab** while the message box is focused, or select the suggestion, to fill the draft. You can edit it before sending. **Escape** dismisses the current suggestion; **Shift+Tab** keeps its normal keyboard navigation.
+
+Suggestions use your selected model and recent conversation, with a bot-specific starter available while the model responds. They never send a message or run a tool. Model-generated suggestions are cached and count toward the workspace’s rolling 24-hour token allowance.
+
+## Context and history
+
+Pi Durable automatically compacts model context as it fills. Older context is summarized so work can continue. The model's active context is different from the conversation history shown in ShinBot.
+
+For occasional manual use, open the conversation's **…** menu and choose **Compact now**. It is unavailable during an active task or another compaction. A progress message appears while context is being managed. Compaction can call the model and use its allowance.
+
+## Interrupted work
+
+Closing the web app or signing out leaves submitted work running on the server. If a model connection or an internal service connection fails temporarily, ShinBot shows a waiting message and retries with increasing delays of up to 30 seconds. Saved work resumes when the connection returns, including after a service restart. Invalid credentials, exhausted account credit and other permanent errors still need your attention. **Stop** cancels waiting work too.
+
+A model connection that stops sending progress is retried after about a minute. An incomplete streamed tool call is discarded before the model retries; it does not execute as an action. Long-running commands keep running in the Computer service while ShinBot checks their saved status.
+
+ShinBot records tool actions before dispatch. If a response is lost, it checks the original action's receipt. A completed action returns its saved result; an action still executing is allowed to finish. If a service crashed during an action and its outcome is unknown, ShinBot asks you to inspect the destination instead of running it again. It cannot guarantee exactly-once effects on arbitrary websites, commands or external services. A website or plugin that reports an uncertain external operation also needs review.
+
+The host and Docker must be running for work to continue. Sleep and shutdown stop execution. Container restart policies take effect when Docker starts again; they do not keep a sleeping computer awake.
+
+Do not repeat an uncertain send or payment without checking what happened first. [Recovery](30-backups-and-upgrades.qmd) covers restored installations and held work.
+
+Message bylines show the date and time in the timezone selected in **Settings → Workspace**. Your message shows when it was sent; a completed reply shows when it finished.

@@ -1,0 +1,39 @@
+---
+title: "Connect models"
+guide-section: "Getting started"
+execute:
+  enabled: false
+---
+
+Choose a provider and model in **Settings → Connections**. Use a model that supports tool calling. You can connect with an API key, a supported subscription sign-in or a compatible local endpoint.
+
+## API key
+
+Open **Settings → Connections**, select a provider, paste its key and choose **Save key**. In **Settings → Workspace**, choose the **Default provider**, **Default model** and **Default thinking effort**, then save. The thinking levels depend on the selected model. These defaults apply to new chats; existing chats keep their settings. A bot profile can override the provider and model, and the chat model picker lets you change the model and thinking effort for one conversation.
+
+Keys are kept in the private runtime volume. They are not returned to the browser after saving. Local administrators and anyone with access to the runtime volume or backups can read stored credentials.
+
+## Subscription sign-in
+
+Connections lists sign-in buttons only for providers with a supported OAuth flow. Follow the provider's authorization page and return to ShinBot. On a remote host, finish the flow locally and paste the full callback URL when prompted.
+
+Account eligibility and usage limits depend on the provider. If sign-in fails, read the provider's error and try an API key or another model.
+
+## Local or compatible endpoint
+
+In **Connections → Local or compatible model**, enter:
+
+| Field | Example |
+| --- | --- |
+| Provider ID | `custom-local` |
+| Endpoint | `http://host.docker.internal:11434/v1` |
+| Model name | The exact model identifier served by your endpoint |
+| API key | Leave blank if the endpoint does not require one |
+
+The endpoint must be reachable from the runtime container. `localhost` inside that container means the container itself. The release configuration supplies `host.docker.internal` for services running on the Docker host.
+
+## Limits and changing models
+
+Workspace settings include a per-message token budget and a rolling 24-hour budget. Usage is checked between model calls; an in-flight call can exceed the remaining allowance. Your provider's usage records determine billing.
+
+Choose a model before starting a new conversation. Existing conversations keep their recorded configuration. If a selected provider has no saved credentials, ShinBot keeps your draft and asks you to connect it.

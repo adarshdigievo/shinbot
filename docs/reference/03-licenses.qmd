@@ -1,0 +1,57 @@
+---
+title: Licenses and dependencies
+execute:
+  enabled: false
+---
+
+ShinBot is distributed under the [MIT license](https://github.com/adarshdigievo/shinbot/blob/main/LICENSE). It uses published upstream packages unchanged. Keep their copyright and license notices when redistributing ShinBot packages or images.
+
+## Application dependencies
+
+The Python and JavaScript lockfiles record the selected dependency graphs. `computer/package-lock.json` pins Skills CLI 1.7.2 and its dependencies under MIT, ISC and [Blue Oak Model License 1.0.0](https://blueoakcouncil.org/license/1.0.0). Their notices remain in the Computer image. Installed skills and user-configured MCP servers have separate licenses that must be reviewed before use. Pi Durable, Pi AI, Chord, FastAPI, MCP and Playwright use permissive licenses. Lucide icons are distributed with their ISC and MIT notices. DOMPurify provides Apache-2.0 as a license choice.
+
+Reviewed open-source exceptions include **noVNC and certifi under MPL-2.0**, and the optional **python-telegram-bot connector under LGPL-3.0**. Their notice, source and applicable relinking obligations continue to apply. An MIT license on ShinBot does not replace upstream licenses.
+
+The bundled standard-license fingerprints record their SPDX source revision in `src/shinbot/bundled/license-hashes.json`. Unknown or modified texts need review; matching a notice does not establish the license of every file.
+
+New plugin manifests accept the supported permissive identifiers described in the [plugin guide](../developers/03-plugins.qmd). Additional plugin dependencies require a host review before they can enter a runner image.
+
+The landing page uses the unmodified Figtree font under the SIL Open Font License 1.1. Its copyright notice and license ship alongside the font in `site/assets/fonts/OFL.txt`.
+
+## Browser backends
+
+Camoufox's Python package is MIT-licensed. Its selected dependency graph includes permissive licenses and reviewed MPL-2.0 components (`certifi`, `orjson`, and the Windows terminal dependencies `jinxed` and `ansicon`). Its Firefox-derived browser is MPL-2.0 and includes third-party notices. Browser downloads retain upstream files unchanged; ShinBot disables optional automatic addon downloads.
+
+`browser/package-lock.json` pins agent-browser 0.41.0 under Apache-2.0. Its published native binaries bundle axe-core under MPL-2.0 and include the associated third-party license notices. Preserve the package's license files when redistributing the browser image. Chromium and Camoufox browser binaries have platform and third-party licenses separate from their Python and npm wrappers.
+
+## Extension scanner
+
+The gateway’s security extra pins unmodified Cisco Skill Scanner 2.3.1 under Apache-2.0. The lockfile includes its complete dependency graph, including dependencies used by optional upstream analyzers. ShinBot uses its local default static analyzer in a separate process.
+
+Reviewed scanner dependencies include `pcodedmp` under GPL-3.0-or-later, `certifi` under MPL-2.0 and `tqdm` under MPL-2.0 and MIT. Keep their notices and provide corresponding source when redistributing an image, including the [pcodedmp source](https://pypi.org/project/pcodedmp/1.2.6/). LiteLLM 1.103.9’s selected distribution contains the MIT-covered package; its upstream license excludes the separate enterprise directory. Review that boundary again before upgrading. Bundled native libraries also carry notices retained in their packages.
+
+## Documentation tools
+
+Great Docs 0.17.0 is MIT-licensed. Its selected Griffe packages use ISC. The docs-only graph also includes `fqdn` under MPL-2.0. Great Docs and its dependencies are in the `docs` development group and are not part of a normal ShinBot installation.
+
+The pinned Hatchling build backend is MIT-licensed. Its build-time dependencies include `pathspec` under MPL-2.0. Build dependencies are separate from the installed application's dependency graph.
+
+Quarto and the Quarto GitHub Action include GPL terms and are used as build tools. Generated documentation is a separate output; retain notices for any redistributed frontend assets included by the renderer.
+
+## Platform components
+
+Linux and TigerVNC include GPL terms. Chromium contains BSD-style code and third-party components. Debian base images contain packages with their own licenses. Docker-compatible host runtimes have separate terms. These platform licenses are separate from the Python and JavaScript application audit.
+
+Docker releases request SBOM and provenance attestations. These provide a starting inventory, not a complete distribution compliance review. Review base-image and system-package licenses when changing images or preparing a downstream distribution.
+
+The optional Mac desktop backend uses Apple's unmodified Container CLI under Apache-2.0. The Linux desktop includes Xfce components under GPL/LGPL terms, xdotool under BSD-3-Clause, and scrot under its MIT-style license with an acknowledgement requirement. ShinBot uses scrot to capture desktop screenshots. Debian package copyright files remain in `/usr/share/doc`; preserve these notices and corresponding-source obligations when redistributing the desktop image. The host macOS virtualization framework has separate platform terms.
+
+## Review a dependency change
+
+From a source checkout, collect the selected lockfile inventory:
+
+```sh
+uv run python scripts/audit_dependencies.py /tmp/shinbot-dependencies.json
+```
+
+Read upstream license files for missing or ambiguous metadata. Review transitive dependencies as well as the package being added. Do not infer approval from an older experiment lockfile or remove a required dependency to make an audit pass.

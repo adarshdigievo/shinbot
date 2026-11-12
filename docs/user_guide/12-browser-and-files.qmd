@@ -1,0 +1,96 @@
+---
+title: "Browser and files"
+guide-section: "Using ShinBot"
+execute:
+  enabled: false
+---
+
+## Work in the browser
+
+When a bot browses, a small live viewer appears at the bottom of the sidebar. On a phone it appears under the top bar. It shows which bot is using the browser and the page address, and it stays visible on every page without covering your conversation. Drag the viewer to float it anywhere on screen, and use its dock button to put it back. Minimize it to keep it out of the way, or expand it to inspect the full browser. **Show browser** in the top bar restores a minimized viewer.
+
+Open **Computer** to inspect the active browser. Watching does not interrupt the bot or switch its profile. When the browser is idle, Computer opens the selected bot's profile. The browser runs on your server and keeps its sign-ins between restarts.
+
+Choose the takeover control when you need to sign in, enter information yourself or finish a step. Agent browser actions wait while you have control. Hand it back when you are ready for ShinBot to continue.
+
+Browser sharing is set in the [bot profile](11-bots-and-templates.qmd). A bot with access to a signed-in profile can act through those website accounts when permitted.
+
+## Choose a browser
+
+Open **Settings → Browser** to choose the default backend:
+
+- **Camoufox** uses Firefox with fingerprint protection and is the default for new installations.
+- **Chromium** uses Playwright. Existing installations keep their saved browser choice.
+- **agent-browser** uses Vercel's CLI to operate Chromium. ShinBot still provides approvals, persistent profiles and the live Computer view.
+
+The installed-browser list shows which options are ready and gives installation commands for missing backends. A change applies when the next session opens. Each backend stores separate profiles, so switching does not overwrite another browser's sign-ins. Website verification and account restrictions can still apply.
+
+For a source installation, install the browser service and its default browser with:
+
+```sh
+uv sync --inexact --extra browser
+uv run --no-sync python -m camoufox fetch official/stable/156.0.1-beta.36
+```
+
+To use Chromium or agent-browser, also run:
+
+```sh
+npm ci --prefix browser --ignore-scripts
+node browser/node_modules/agent-browser/scripts/postinstall.js
+uv run --no-sync python -m playwright install chromium
+```
+
+The npm installer requires Node.js 24 or newer. The installed agent-browser binary runs without Node. For a Python package installation, use `uv pip install 'shinbot[browser]'` in the browser service's environment, then `python -m camoufox fetch official/stable/156.0.1-beta.36`. Install the CLI with `npm install -g agent-browser@0.41.0`. A service with a restricted PATH can use `SHINBOT_AGENT_BROWSER_EXECUTABLE` to point to that executable.
+
+The Docker browser image includes Camoufox, Chromium and agent-browser. Browser files stay in the browser data volume.
+
+## Close a browser after a task
+
+**Close the browser after a task finishes** is on by default in **Settings → Browser**. It closes the browser after a successful task and keeps saved sign-ins and profile data. Browsers under human control stay open. Failed tasks leave their browser available for inspection.
+
+Turn this setting off to leave completed work open. A bot can also use its browser's `close` action when it no longer needs the session.
+
+## Use the Computer workspace
+
+The Computer provides commands, file tools and executable plugins in a persistent `/workspace` directory. File tools are restricted to that workspace. Commands and plugins run as an unprivileged worker and can access the workspace and outbound network.
+
+The Computer does not automatically have access to your laptop's files, host applications, gateway database or model credentials. The Docker socket is not mounted into the worker. In the standard Docker setup, browser profiles live in a separate service volume. The optional desktop backend runs both services in one Linux environment.
+
+## Use a Linux desktop on a Mac
+
+The optional desktop backend runs a Linux desktop through Apple's `container` runtime on Apple silicon. ShinBot's Python backend stays on your Mac. The desktop contains a terminal, file manager and browser windows, and shares the bot's persistent workspace.
+
+Install [Apple Container](https://github.com/apple/container#requirements) and start it with `container system start`. From a ShinBot source checkout, build and enable the desktop:
+
+```sh
+container build --target desktop -f deploy/Dockerfile -t shinbot-desktop:local .
+shinbot native desktop-enable --runtime "$(command -v container)" --image shinbot-desktop:local
+```
+
+Finish or pause active tasks before switching. ShinBot stops its services, backs up configuration and service data, then restarts with the desktop backend. Your workspace stays in the native data directory. Browser profiles, executor receipts and plugin files live in a persistent Apple Container volume; disabling the desktop preserves that volume. The Linux browser uses a separate profile, so sign in to websites again; your previous Mac browser profiles remain available.
+
+Open **Computer** to see the desktop. **Take control** enables keyboard and mouse input. Use **Browser**, **Files** or **Terminal** to open an application. Bot browser, desktop and workspace actions wait until you select **Hand back**. If an action is already finishing, wait and try taking control again.
+
+Ask the bot to use the `desktop` tool to inspect or interact with applications. Desktop input requires approval in Auto and Ask modes. The browser tool retains its more specific approval checks for web actions. A desktop screenshot can be attached to chat. Closing the browser returns to the desktop and keeps its saved profile.
+
+Run `shinbot native desktop-backup` while tasks are idle to save configuration, workspace and Linux service data together. Backups are stored in the native installation's `backups` directory and include credentials. Keep them private.
+
+To return to native execution:
+
+```sh
+shinbot native desktop-disable
+```
+
+ShinBot saves an offline copy of the desktop service data under the native installation's `backups` directory and transfers Computer receipts and plugin files back to native storage. Browser profiles stay separate. Software installed for Linux may need its macOS equivalent when switching back. Native execution requires the permission previously granted to use your macOS account.
+
+## Receive files in chat
+
+Ask the bot to create and attach a file, such as a CSV report or a document. Files up to 10 MB appear in the conversation with a **Download** link. Supported images also have an inline preview that opens at full size. Files remain available after refreshing the page or restarting ShinBot, even if the original workspace file changes.
+
+For browser screenshots, ask “Take a screenshot and show it here.” The bot captures the current viewport and attaches it to the chat. Screenshots remain available after the browser closes. Images from routine browser observations are for the model; they are not added to the conversation automatically.
+
+Attachment links require you to sign in to this ShinBot installation. They are not public sharing links. Bots use `attach_file` with a relative workspace path for existing files, or the browser's `screenshot` action for a page capture.
+
+## When the view is unavailable
+
+Use **Try again**, then inspect **Settings** and run `shinbot status` or `shinbot doctor` on the host. A stopped browser service cannot provide a live view. Do not expose the browser or VNC ports directly to the internet; use the authenticated gateway.

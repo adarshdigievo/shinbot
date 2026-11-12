@@ -1,0 +1,34 @@
+---
+title: "Scheduled jobs"
+guide-section: "Using ShinBot"
+execute:
+  enabled: false
+---
+
+Jobs run a task once or on a schedule. Open **Jobs**, choose **New job**, write the task and set its timing. You can also ask ShinBot to propose a routine; creating a schedule through the agent requires approval.
+
+## Timing options
+
+- **Once:** run at a chosen time.
+- **Interval:** run repeatedly, with a minimum interval of one minute.
+- **Cron:** use a five-field cron expression and an IANA timezone.
+
+For weekday planning at 9am in India:
+
+```sh
+shinbot jobs add "Morning planning" "Read my notes and suggest three priorities." "0 9 * * 1-5" --timezone Asia/Kolkata
+```
+
+Use `UTC`, `Europe/London`, or another valid timezone for schedules elsewhere. Consider daylight-saving changes when choosing a local time.
+
+## Inspect and change a routine
+
+The Jobs page shows the next run and current status. Open History to inspect previous runs, pause a job to stop future runs, or edit its prompt and schedule. A job uses the task system and the same action permissions as other work; a run can wait for approval.
+
+## Service behavior
+
+Jobs keep running after you close the web app. Keep the host, Docker engine and ShinBot services running for scheduled work to execute. Sleep and shutdown pause execution.
+
+After a backup restore, schedules are paused. Inspect the restored installation, stop the old copy, release its recovery hold, and re-enable schedules individually.
+
+When a scheduled job skips a run because its preceding task is still active or uncertain, the activity log links to that task. Resolve it before expecting the routine to run again.

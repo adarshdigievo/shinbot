@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "paint",
+  "name": "Paint",
+  "version": "1.0.0",
+  "description": "A drawing canvas in the sidebar, with drawings saved for each bot.",
+  "kind": "extension",
+  "license": "MIT",
+  "permissions": [
+    "ui.pages",
+    "ui.styles"
+  ],
+  "ui": {
+    "pages": [
+      {
+        "id": "canvas",
+        "title": "Paint",
+        "icon": "pencil",
+        "entrypoint": "paint.js"
+      }
+    ],
+    "styles": [
+      "paint.css"
+    ]
+  },
+  "hooks": [],
+  "files": [
+    "LICENSE",
+    "paint.css",
+    "paint.js"
+  ]
+}

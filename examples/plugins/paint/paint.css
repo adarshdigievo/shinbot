@@ -1,0 +1,2 @@
+[data-plugin="paint"] .paint-canvas{display:block;width:100%;max-width:1000px;aspect-ratio:50/31;height:auto;background:#fff;border:1px solid var(--line);border-radius:8px;touch-action:none;margin-top:16px}
+[data-plugin="paint"] input[type=color]{width:44px;height:34px;padding:3px}

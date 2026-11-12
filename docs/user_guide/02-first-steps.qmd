@@ -1,0 +1,38 @@
+---
+title: "First-time setup"
+guide-section: "Getting started"
+execute:
+  enabled: false
+---
+
+## Create your workspace
+
+Open the address printed by `shinbot start`. A local first start includes the installation token in the setup link. If Home asks for it, run `shinbot setup-token` on the host and paste the result.
+
+Choose a password with at least 12 characters. You can reveal it while typing. Starter templates are optional; a selected template appears beside the setup form and can be removed before creating the workspace.
+
+Setup suggests your browser’s timezone. Keep it or choose another; change it later in **Settings → Workspace**.
+
+## Connect a model
+
+Choose **Connect your model** on Home. You can provide an API key, use a supported subscription sign-in, or connect a local or OpenAI-compatible endpoint. [Model connections](03-models.qmd) explains the options.
+
+Once a model is connected, choose **Start chatting**. **Help me get started** sends a request to the selected model to help you choose a first task. That action uses your provider's allowance.
+
+## Try a small task
+
+Start with a task you can check:
+
+> Help me plan tomorrow. Ask about my commitments first, then write a short plan in a note.
+
+Or try a browser task:
+
+> Open the project website and find its installation instructions. Tell me what you found before downloading anything.
+
+When ShinBot asks for approval, read the action and its arguments. Use Computer to watch a website, take over a step, and hand control back.
+
+## Make the workspace comfortable
+
+Open **Settings → Appearance** to choose System, Light or Dark. System is the default and follows the device setting. The choice is saved in this browser and applies immediately. Appearance is also available before sign-in.
+
+Use the sidebar to switch between bots and recent chats. Press **Cmd K** on macOS or **Ctrl K** on Linux to search the workspace. Message drafts stay with their bot or conversation when you switch pages.

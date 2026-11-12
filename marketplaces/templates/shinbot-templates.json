@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "templates": [
+    {
+      "id": "everyday-assistant",
+      "version": "1.0.0",
+      "path": "templates/everyday-assistant/template.json",
+      "sha256": "200076673afcbfe85d44b07f87392423b8b160c523f1947721048d960e78a4a4"
+    },
+    {
+      "id": "research-team",
+      "version": "1.0.0",
+      "path": "templates/research-team/template.json",
+      "sha256": "324775069472a172b0ac2ccfe958e84e6e0c818a863564bec97218990c9b0e3f"
+    },
+    {
+      "id": "researcher",
+      "version": "1.0.0",
+      "path": "templates/researcher/template.json",
+      "sha256": "640862eabc1000215c9a7ae37e9fbbd20a33d827cc16ef376594db94b2798630"
+    },
+    {
+      "id": "writing-partner",
+      "version": "1.0.0",
+      "path": "templates/writing-partner/template.json",
+      "sha256": "757a5de03c671f81c40dcccf447599dd47428b80cedf94fea3f36ea3197a75aa"
+    }
+  ]
+}

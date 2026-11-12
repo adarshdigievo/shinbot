@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "id": "kanban",
+  "name": "Kanban",
+  "version": "1.1.0",
+  "description": "Keep goals on a persistent board, with run limits and optional token budgets. Review each bot\u2019s evidence.",
+  "kind": "builtin",
+  "license": "MIT",
+  "files": [
+    "LICENSE"
+  ],
+  "permissions": [
+    "work-cards"
+  ],
+  "tools": [
+    {
+      "name": "list_cards",
+      "description": "List work cards assigned to this bot.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "requires_confirmation": false
+    },
+    {
+      "name": "save_card",
+      "description": "Create a backlog card or edit a paused card. Does not start execution. Preserve the full goal and its acceptance checks.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "max_runs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000000,
+            "description": "Total token cap across all card runs. Use 0 for no limit (the default for new cards), or at least 1000 for a cap. Workspace caps still apply."
+          },
+          "auto_continue": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "title",
+          "goal"
+        ],
+        "additionalProperties": false
+      },
+      "requires_confirmation": false
+    },
+    {
+      "name": "card_history",
+      "description": "Read run summaries and evidence for a card assigned to this bot.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "requires_confirmation": false
+    },
+    {
+      "name": "finish_run",
+      "description": "Report the outcome of the current work-card run. Completion needs evidence for the entire goal and goes to owner review. Continue needs a concrete next step.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "continue",
+              "blocked"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "next_step": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "summary",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "requires_confirmation": false
+    }
+  ]
+}

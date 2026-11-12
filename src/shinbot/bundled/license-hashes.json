@@ -1,0 +1,14 @@
+{
+  "source": "https://github.com/spdx/license-list-data",
+  "revision": "31ba1a50e5397e00a304dbadc76531740e89ee48",
+  "normalized_sha256": {
+    "MIT": "56959050891f7b737ac4e803051170c7197f02df73d80bd9a78d968e305bf558",
+    "Apache-2.0": "948703bcf1cb4a2dafd21676dd01e40a58fe21bd9b425c000b9070eccb441092",
+    "BSD-2-Clause": "a63ef1112ebbd402f4b08567180951af8e947e407c24ee835882c6ffa65195d0",
+    "BSD-3-Clause": "e67a28b98bc45809b4963df778c62512492386503bfb2d148039abcf2d3525a7",
+    "ISC": "a2a686418bbdbf37f28aaf01ff3aef45cfe077a641470465923c8c23fcbe08f9",
+    "0BSD": "08e6cbaeaf49ec3bb90e15e4f5a18c018eae23c7a1431f60f6a2f32306cdb707",
+    "Unlicense": "6cd6bc138f2d97f904f072ba438aa802e81d3c24f9783b398f148031dfe12aff",
+    "CC0-1.0": "3de3b5118df8d74984d5d56a03ca27484aae85fac8339e6c9faa8b5c4e69460c"
+  }
+}

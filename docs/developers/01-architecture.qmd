@@ -1,0 +1,78 @@
+---
+title: How ShinBot works
+execute:
+  enabled: false
+---
+
+ShinBot adds a personal-assistant application around Pi Durable: a place to talk to bots, watch their browser, save notes, manage routines and review new capabilities. Python owns the product. A small TypeScript service connects it to the unmodified Pi packages.
+
+## Six parts
+
+| Part | Responsibility | Components |
+| --- | --- | --- |
+| Agent | Model calls, tool calls, conversation state and context compaction | Pi Durable, Pi AI and Chord |
+| Gateway | Web app, CLI API, authentication, approvals and task coordination | Python, FastAPI, plain HTML/CSS/JavaScript |
+| Computer | Workspace files, commands, executable plugins and browser interaction | Python worker, MCP, Playwright, Chromium, Xvfb, TigerVNC and noVNC |
+| Notebook | Editable pages, explicitly saved memories, search and exports | SQLite FTS5 and Markdown |
+| Jobs | Scheduled tasks and run history | Python coordinator, croniter and SQLite |
+| Plugins | Skills, MCP tools and optional channels from repository catalogs | Versioned manifests, content hashes and separate processes |
+
+SQLite stores application state. Pi Durable and Chord keep the agent's execution state. ShinBot integrates published packages through their public APIs.
+
+## Service boundaries
+
+Docker Compose starts four core services.
+
+| Service | Network access | Persistent storage |
+| --- | --- | --- |
+| `control` | The only published port; connects to internal services | Tasks, profiles, notes, approvals, schedules and plugin packages |
+| `runtime` | Gateway and model providers | Provider credentials and agent state |
+| `computer` | Gateway and outbound network | Execution journal and a shared workspace |
+| `browser` | Gateway and websites | Browser profiles and execution journal |
+
+Internal services authenticate requests with separate credentials. Containers do not mount the Docker socket or host home directory. Commands and executable plugins run under an unprivileged identity in the Computer. They have workspace and network access; plugin permission descriptions do not impose a separate network sandbox.
+
+## From a message to an action
+
+1. The gateway authenticates the user and creates a task with the selected bot profile and pinned plugin versions.
+2. The coordinator sends work to the runtime. Pi calls the selected provider with the conversation, instructions and available tools.
+3. A tool request returns to the gateway. ShinBot checks permissions and asks for approval when needed.
+4. The responsible service records the action before executing it. The result returns to Pi and appears in the conversation.
+5. The coordinator records progress, usage and the final task state. The UI receives updates from the gateway.
+
+Repeated delivery of a completed action returns its recorded outcome. Image payloads use an in-memory cache capped at 8 MB and two minutes in each gateway and executor process. Journals keep text and a replay placeholder; a replay after cache expiry may require a fresh observation. Pi stores the image in conversation history when it receives the result. An interrupted action whose effect is unknown requires inspection before retrying. Durable execution cannot guarantee exactly-once effects on arbitrary websites or shell commands.
+
+## State and concurrency
+
+Pi Durable persists model retry checkpoints and wake times. ShinBot configures retries for transient provider failures with backoff capped at 30 seconds. A provider adapter built on Pi's public stream API aborts connections after 60 seconds without progress and returns a retryable error. Provider events reset that deadline. SDK retries are disabled so Pi owns the persistent retry schedule; explicit cancellation remains an abort. Authentication and billing failures are not treated as connection outages.
+
+The runtime retries idempotent gateway requests using their existing action IDs. The gateway persists executor retry deadlines in SQLite and queries the Computer or browser journal before dispatching again. A missing receipt permits dispatch with the same ID, a completed receipt supplies the saved result, and an unfinished receipt after an executor restart requires owner review. Tool response waits are capped at 30 seconds; a command can continue running in the executor while the gateway polls its receipt.
+
+Bots have separate conversation histories and memories. Notebook pages and workspace files belong to the installation. Browser cookies can belong to one bot, a group, or all bots. Browser profiles open on demand on one interactive display, so browser operations are serialized. Other model and file work can continue concurrently.
+
+The coordinator reuses HTTP clients, caps concurrent runs, backs off unchanged polls, and sleeps between checks. Idle services do not call a model. Chromium starts on first browser use; it stays open afterward to preserve the interactive session. Runtime history and user files remain persistent, so monitor disk usage and keep backups.
+
+The scheduler records due runs in SQLite, coalesces missed runs after downtime, checks lateness and skips overlaps. Restores pause scheduling and establish a recovery hold before work resumes. See [jobs](../user-guide/scheduled-jobs.html) and [backup and recovery](../user-guide/backups-and-upgrades.html).
+
+## Product knowledge and release checks
+
+The `status` tool reports the conversation's identity, model, permissions, usable extensions and browser profile. `bots list` reads current profiles. The `shinbot_help` tool loads product guidance on demand, including the plugin manifest schema and an executable MCP example. Keep this help aligned with implemented behavior; static descriptions must not imply an optional plugin is active.
+
+The gateway caches public GitHub and PyPI release metadata in SQLite. Automatic checks run independently of the model and task coordinator, and can be disabled. The host launcher checks its own Python compatibility before installing a verified stable version. The gateway cannot run host updates. The `--latest` path hands off to a fresh interpreter after upgrading the launcher, then uses the existing checkpoint, health-check and rollback flow.
+
+## Where to make a change
+
+| Location | Owns |
+| --- | --- |
+| `src/shinbot/app.py`, `core.py`, `coordinator.py` | HTTP API and product coordination |
+| `src/shinbot/tasks.py`, `jobs.py`, `db.py` | Task lifecycle, scheduling and storage |
+| `src/shinbot/bots.py`, `notebook.py`, `plugins.py` | Profiles, notes, memories and extension catalogs |
+| `src/shinbot/sources.py`, `learning.py` | Source inspection, portable adapters and evidence-backed skill proposals |
+| `src/shinbot/services/` | Computer, browser and channel services |
+| `src/shinbot/web/` | Packaged web application and vendored assets |
+| `src/shinbot/cli.py` | Installation, local deployment and CLI |
+| `runtime/src/` | Pi adapter and provider authentication |
+| `deploy/` | Container targets and Compose definitions |
+| `marketplaces/` | Official starter plugin and template catalogs |
+
+Optional plugins add connections, tools, sidebar pages, themes, UI patches and lifecycle hooks. Trusted UI modules load through authenticated, bot-scoped asset routes. Python hooks run as short-lived Computer workers; gateway and Computer receipts retain their results across reconnects. Hook-transformed tool arguments pass through the normal approval checks. Put a service-specific capability in a plugin when possible. Change the core when the behavior needs shared authentication, durable coordination, permissions or a new shared extension point. Keep provider-specific logic in the runtime adapter.

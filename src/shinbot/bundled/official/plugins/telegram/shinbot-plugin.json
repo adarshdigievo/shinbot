@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "telegram",
+  "name": "Telegram",
+  "version": "1.1.0",
+  "description": "Chat privately with your ShinBot profiles, switch bots with /bot, and receive complete replies and job results.",
+  "kind": "channel",
+  "license": "MIT",
+  "files": [
+    "LICENSE",
+    "telegram.py"
+  ],
+  "permissions": [
+    "telegram-account",
+    "task-messages",
+    "job-notifications"
+  ],
+  "entrypoint": "telegram.py"
+}

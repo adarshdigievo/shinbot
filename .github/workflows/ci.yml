@@ -1,0 +1,140 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      docker_tests:
+        description: Run the isolated Docker integration journeys
+        type: boolean
+        default: true
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  checks:
+    name: Python and runtime (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: '0.11.2'
+          python-version: '3.13.12'
+          enable-cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+          cache-dependency-path: runtime/package-lock.json
+      - run: uv sync --frozen --extra computer --extra security --extra telegram
+      - run: uv run --frozen ruff check src tests scripts
+      - run: uv run --frozen python scripts/release.py check
+      - run: npm --prefix computer ci --ignore-scripts
+      - run: uv run --frozen --extra computer --extra security --extra telegram pytest --durations=10
+      - run: npm --prefix runtime ci --ignore-scripts
+      - name: Check locked Node dependencies for advisories
+        if: runner.os == 'Linux'
+        run: |
+          npm --prefix runtime audit --audit-level=low
+          npm --prefix computer audit --audit-level=low
+      - run: npm --prefix runtime run build
+      - run: npm --prefix runtime test
+      - run: node --test tests/*.test.mjs
+      - name: Verify vendored web assets
+        run: |
+          node scripts/copy_web_assets.mjs
+          git diff --exit-code -- src/shinbot/web/vendor
+          node --check src/shinbot/web/app.js
+          node --check src/shinbot/web/theme.js
+      - run: uv build --out-dir dist/ci
+      - run: uv run --frozen python scripts/release.py check-wheel dist/ci
+      - name: Install the wheel outside the checkout
+        run: |
+          uv venv "$RUNNER_TEMP/wheel-test"
+          uv pip install --python "$RUNNER_TEMP/wheel-test/bin/python" dist/ci/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/wheel-test/bin/shinbot" version
+          "$RUNNER_TEMP/wheel-test/bin/shinbot" --help
+  browser:
+    name: Web UI journeys
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: '0.11.2'
+          python-version: '3.13.12'
+          enable-cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.1'
+      - run: uv sync --frozen --extra computer --extra security
+      - run: npm --prefix runtime ci --ignore-scripts
+      - run: npm --prefix computer ci --ignore-scripts
+      - run: npm --prefix runtime run build
+      - run: uv run --frozen playwright install --with-deps chromium
+      - run: uv run --frozen --extra security python tests/run_onboarding.py
+      - run: uv run --frozen --extra computer --extra security python tests/run_local_services.py
+      - run: uv run --frozen --extra security python tests/run_token_budgets.py
+      - run: uv run --frozen --extra security python tests/run_prompt_suggestions.py
+      - run: uv run --frozen --extra security python tests/run_chat_queue.py
+      - name: Test Camoufox and chat file delivery
+        run: |
+          uv sync --frozen --extra computer --extra security --extra browser
+          uv run --no-sync playwright install-deps firefox
+          uv run --no-sync python -m camoufox fetch official/stable/156.0.1-beta.36
+          uv run --no-sync python tests/run_attachments.py
+  workflows:
+    name: Workflow syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 # 1.7.12
+        with:
+          args: -color
+  docker:
+    name: Container integration
+    if: github.event_name != 'workflow_dispatch' || inputs.docker_tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: '0.11.2'
+          python-version: '3.13.12'
+          enable-cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.1'
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - run: uv sync --frozen --extra computer --extra security --extra telegram
+      - run: npm --prefix runtime ci --ignore-scripts
+      - run: node scripts/copy_web_assets.mjs
+      - run: uv run --frozen playwright install --with-deps chromium
+      - name: Build all service images
+        shell: bash
+        run: |
+          version=$(uv run --frozen python -c 'from shinbot import __version__; print(__version__)')
+          for service in control runtime computer browser telegram; do
+            docker buildx build --load --file deploy/Dockerfile --target "$service" \
+              --tag "shinbot-dev/shinbot:$version-$service" .
+          done
+      - run: uv run --frozen python tests/run_e2e.py

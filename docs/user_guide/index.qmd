@@ -1,0 +1,45 @@
+---
+title: "Meet ShinBot"
+guide-section: "Getting started"
+execute:
+  enabled: false
+---
+
+ShinBot is a personal assistant that runs on your own server. Use it to research questions, work with files, navigate websites, keep notes and run routines. Give each bot a role, choose its model and decide which browser sign-ins it can share.
+
+ShinBot supports one owner with multiple bot profiles. Choose a capable model with tool calling.
+
+## Start here
+
+1. [Install ShinBot](user-guide/installation.html) with Python and Docker.
+2. [Create your workspace and connect a model](user-guide/first-steps.html).
+3. [Start a conversation](user-guide/conversations.html) and approve an action when needed.
+
+## What you can do
+
+| Capability | Where to use it |
+| --- | --- |
+| Research, plan and work with files | [Chat](user-guide/conversations.html), with a model of your choice |
+| Use websites and keep sign-ins | [Computer](user-guide/browser-and-files.html), with takeover and handback |
+| Create specialist assistants | [Bots and templates](user-guide/bots-and-templates.html), including shared groups |
+| Keep notes and selected personal facts | [Notebook](user-guide/notes-and-memory.html) |
+| Run one-time or recurring work | [Jobs](user-guide/scheduled-jobs.html), including cron and timezones |
+| Use the terminal | [CLI reference](reference/cli.html), connected to the same gateway |
+
+## Extend ShinBot
+
+Add tools and connections through plugins, teach reusable procedures with skills, or share a bot setup as a template. Start with [Extending ShinBot](user-guide/extending.html) to choose what you need.
+
+- [Install plugins, connect MCP servers and add skills](user-guide/plugins.html).
+- [Import and share bot templates](user-guide/bots-and-templates.html#start-from-a-template).
+- [Write a plugin](developers/plugins.html) or [publish a template repository](developers/templates.html).
+
+Browse the [official plugin marketplace](https://github.com/adarshdigievo/shinbot-official-plugins) for optional integrations.
+
+## What stays on your server
+
+Conversations, notes, workspace files, browser profiles and saved credentials persist in your installation. Reinstalling the Python package does not delete them. Your model provider receives the prompts, tool results and other content needed for its requests. Websites and plugins receive data when you use them.
+
+[Backups and upgrades](user-guide/backups-and-upgrades.html) explains where data lives and how to move an installation. [Remote access](user-guide/remote-access.html) explains the recommended SSH tunnel and HTTPS options.
+
+[ShinBot website](https://adarshdigievo.github.io/shinbot/) · [Source code](https://github.com/adarshdigievo/shinbot) · [Releases](https://github.com/adarshdigievo/shinbot/releases)

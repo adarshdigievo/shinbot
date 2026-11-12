@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "id": "github",
+  "name": "GitHub",
+  "version": "1.0.0",
+  "description": "Read repository files, issues and pull requests. Create issues, comments and pull requests with your approval.",
+  "kind": "mcp",
+  "license": "MIT",
+  "files": [
+    "LICENSE",
+    "server.py"
+  ],
+  "entrypoint": "server.py",
+  "permissions": [
+    "github-repositories",
+    "github-issues",
+    "github-pull-requests"
+  ],
+  "configuration": [
+    {
+      "key": "SHINBOT_PLUGIN_GITHUB_TOKEN",
+      "label": "GitHub token",
+      "description": "Use a fine-grained personal access token restricted to the repositories you want to connect. Never paste it into chat.",
+      "secret": true,
+      "required": true
+    },
+    {
+      "key": "SHINBOT_PLUGIN_GITHUB_REPOSITORIES",
+      "label": "Connected repositories",
+      "description": "Comma-separated owner/repository names, up to 25. Only these repositories are available to this plugin.",
+      "required": true
+    }
+  ],
+  "tools": [
+    {
+      "name": "connection_status",
+      "description": "Check the connected GitHub account and configured repository list.",
+      "input_schema": {
+        "properties": {},
+        "title": "connection_statusArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_repository",
+      "description": "Read a connected repository's description, default branch and permissions.",
+      "input_schema": {
+        "properties": {
+          "repo": {
+            "title": "Repo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "get_repositoryArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "search_items",
+      "description": "Search issues or pull requests in one connected repository. Text contains search words, not GitHub qualifiers.",
+      "input_schema": {
+        "properties": {
+          "repo": {
+            "title": "Repo",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          },
+          "kind": {
+            "default": "issue",
+            "enum": [
+              "issue",
+              "pr"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "state": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed",
+              "all"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "search_itemsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_issue",
+      "description": "Read an issue or pull-request conversation and a page of its comments.",
+      "input_schema": {
+        "properties": {
+          "repo": {
+            "title": "Repo",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo",
+          "number"
+        ],
+        "title": "get_issueArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_pull_request",
+      "description": "Read a pull request and one page of changed files, with bounded patches.",
+      "input_schema": {
+        "properties": {
+          "repo": {
+            "title": "Repo",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo",
+          "number"
+        ],
+        "title": "get_pull_requestArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "read_file",
+      "description": "Read a UTF-8 repository file or list a directory. Does not execute downloaded code.",
+      "input_schema": {
+        "properties": {
+          "repo": {
+            "title": "Repo",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "ref": {
+            "default": "",
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "path"
+        ],
+        "title": "read_fileArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_issue",
+      "description": "Create an issue after the owner approves its repository, title and body.",
+      "input_schema": {
+        "properties": {
+          "repo": {
+            "title": "Repo",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "title"
+        ],
+        "title": "create_issueArguments",
+        "type": "object"
+      },
+      "requires_confirmation": true
+    },
+    {
+      "name": "comment",
+      "description": "Post an issue or pull-request comment after the owner approves the text.",
+      "input_schema": {
+        "properties": {
+          "repo": {
+            "title": "Repo",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "number",
+          "body"
+        ],
+        "title": "commentArguments",
+        "type": "object"
+      },
+      "requires_confirmation": true
+    },
+    {
+      "name": "update_issue",
+      "description": "Close or reopen an issue after owner approval. Pull requests use a different workflow.",
+      "input_schema": {
+        "properties": {
+          "repo": {
+            "title": "Repo",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "number",
+          "state"
+        ],
+        "title": "update_issueArguments",
+        "type": "object"
+      },
+      "requires_confirmation": true
+    },
+    {
+      "name": "create_pull_request",
+      "description": "Create a pull request from existing branches after approval. Does not push commits or merge.",
+      "input_schema": {
+        "properties": {
+          "repo": {
+            "title": "Repo",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "head": {
+            "title": "Head",
+            "type": "string"
+          },
+          "base": {
+            "title": "Base",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "draft": {
+            "default": true,
+            "title": "Draft",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repo",
+          "title",
+          "head",
+          "base"
+        ],
+        "title": "create_pull_requestArguments",
+        "type": "object"
+      },
+      "requires_confirmation": true
+    }
+  ]
+}

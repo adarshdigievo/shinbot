@@ -1,0 +1,237 @@
+---
+title: "Plugins, MCP and skills"
+guide-section: "Extending ShinBot"
+execute:
+  enabled: false
+---
+
+Plugins add instructions, tools, sidebar apps, themes, chat shortcuts and automatic workflows. The official catalog is available on a new installation; no plugins are installed or staged automatically. Choose and activate the capabilities you need.
+
+## Find a plugin
+
+Open **Plugins** to browse installed packages and marketplace catalogs. The [official plugin repository](https://github.com/adarshdigievo/shinbot-official-plugins) contains optional integrations and their setup instructions. Choose the plugins you need, review their files and configure them before activation.
+
+Add a community or personal repository through **Add marketplace** or:
+
+```sh
+shinbot marketplace add your-name/your-shinbot-plugins
+shinbot marketplace list
+```
+
+Refreshing resolves the repository to a commit and verifies package hashes. It does not run code or replace active plugins automatically. Repository discovery currently uses public GitHub repositories; use local installation for a private package.
+
+## Stage, review and activate
+
+1. Stage the version you want.
+2. Check the security scan, then choose **Review files** to read its findings, manifest, instructions, code, license and source information.
+3. If the plugin has a **Configure** button, enter its credentials and settings.
+4. Activate it. Sidebar pages and styles appear immediately; start a new conversation to use newly enabled tools and hooks.
+
+Local packages must use an ID that is not already listed in a marketplace. The installed list and configuration dialog show where each package came from.
+
+For a local package:
+
+```sh
+shinbot plugins install ./my-plugin
+shinbot plugins activate my-plugin 1.0.0
+shinbot plugins list
+```
+
+Existing conversations keep their pinned versions. Activate another installed version to roll back. `shinbot plugins disable my-plugin` also blocks further calls from existing conversations.
+
+## Security scans
+
+ShinBot runs [Cisco Skill Scanner](https://github.com/cisco-ai-defense/skill-scanner) locally when staging marketplace packages, local plugins, imported skills and skills created by a bot. Imported and saved bot templates are scanned too. The scan uses upstream static rules and sends no extension content to a model or external scanning service.
+
+High or critical findings block activation. An unavailable, incomplete or timed-out scan also blocks activation. Open **Review files → Run scan again** to retry. Findings remain visible in Plugins. Approval rules and automatic permissions cannot bypass this check. A changed package needs a new version and scan.
+
+Scans cover ShinBot’s managed imports and activation. Computer commands have separate permissions; arbitrary commands do not pass through this scanner. A completed scan does not prove an extension is safe. Review warnings and code before granting access. MCP connection scans cover the supplied configuration and discovered tool descriptions; they cannot inspect a remote implementation or packages downloaded by its launch command.
+
+The Docker gateway includes the scanner. For a backend run directly from source, install the security extra with `uv sync --extra security`; for a directly installed Python backend, use `uv pip install 'shinbot[security]'` in that backend’s environment.
+
+## Coding projects and parallel tasks
+
+Install and activate the optional official **Projects** plugin to add **Projects** to the sidebar.
+
+Choose **Add repository** and browse to an existing Git repository on ShinBot’s Computer. These folders are on the server, not the device running your browser. In Docker, clone repositories into `/workspace` using the Computer tools, or explicitly mount a host repository beneath `/workspace` in your Compose configuration. The repository needs at least one commit.
+
+Choose **New task**, select a bot and describe the change. ShinBot creates a branch and worktree from the repository’s committed HEAD. It does not copy uncommitted changes. Start another task to work on a second feature in parallel, including with the same bot profile. The global concurrency and token limits still apply.
+
+Open a task’s chat to prompt the bot. Select its title in Projects to inspect tracked changes, browse files, read new files and open delegated tasks. Commands and file tools start in that task’s worktree. Worktrees separate checkouts; executable tools still share the Computer environment and are not security-isolated from other worktrees.
+
+A bot with Projects access can delegate a task to another bot after your approval. The child gets a new worktree, its own conversation and permissions no broader than the requester’s. Its result returns to the requesting conversation. Each task can create up to four children, with three delegation levels and sixteen children across the workflow. Stopping the requesting task also stops active children. An archived parent receives results in its saved conversation without restarting.
+
+Use delegation for separate features, investigations or reviews with an explicit scope. New worktrees do not include the parent’s uncommitted edits, so a reviewer must be directed to inspect those files or their diff. To use an external coding CLI, install and authenticate it in the Computer environment, then ask a bot to invoke it through approved commands.
+
+**Archive worktree** removes a clean, inactive checkout and retains its branch and conversation. It refuses changed, untracked or ignored files, and files hidden from Git status. Commit or otherwise save work yourself before archiving. ShinBot does not automatically commit, push, merge or delete branches. Repositories and worktrees persist in the Computer workspace volume and are included in native backups.
+
+## Kanban board
+
+Install and activate the optional official **Kanban** plugin first. Then use **Board → New card** for work that may need several runs. Write the goal and acceptance checks, choose a bot, and set a run limit. Token budgets are optional and off by default: leave **Total token budget** blank for no limit, or enter a cap for the entire card across its runs. Workspace usage caps still apply. Move the card to **Ready** to start. A bot can also draft cards from chat; you decide when they begin.
+
+Each run records its summary, evidence and next step. With automatic continuation enabled, the next run starts when the bot is available and budget remains. Completed work moves to **Review**, where you can inspect the evidence and conversation before marking it **Done**. A failed run, a missing requirement or an exhausted budget stops continuation. Work without a completion report also needs review.
+
+**Pause** stops a running card. Review the current action before resuming if its outcome is uncertain. Edit a paused card to change its goal or budget. Card history and budgets survive service restarts. Clearing a paused card’s token budget removes its cap without clearing its usage or history. Kanban 1.1.0 also lets bots explicitly set a card’s token budget to `0` for no limit. Token limits are checked before each generation; an in-flight model request can exceed the remaining allowance.
+
+The coordinator admits four active bot runs by default, with one active run per bot for ordinary chats and work cards. Projects tasks in separate worktrees can run concurrently with the same bot. Change **Concurrent bot runs** in Settings to suit your host. Cards wait while their bot has an active conversation or approval request. Jobs and Board work use the same permissions and daily allowance as chat.
+
+## GitHub attention inbox
+
+Install and activate **Projects 1.1.0** in Plugins, then open **Projects → GitHub inbox → Connect GitHub**. Connect your account and select repositories or organizations to follow. Use **Manage sources** to change your selection. You can follow up to ten repositories and organizations in total.
+
+The inbox groups review requests, assignments, mentions and other activity. **New activity** means the issue has changed since you marked it seen in ShinBot. **Involved / subscribed** includes GitHub notification activity; it is not a complete inventory of your subscriptions. A fine-grained token needs Issues and Pull requests read access to its selected repositories. GitHub's notifications endpoint requires a classic token with `notifications` scope, plus `repo` for private repository activity. If that feed is unavailable, the inbox still searches repository issues and review requests and shows a warning.
+
+Use **Refresh** to check GitHub, including changes you made outside ShinBot. Merged pull requests and closed issues leave **Needs attention** and remain in **All open / activity**. Opening the inbox also refreshes a snapshot older than five minutes. Each source includes up to 100 recently updated open matches per search, with separate searches for your involvement and requested reviews. The notification feed includes up to 300 entries. Each refresh checks the current status of up to 100 items, prioritizing unresolved work. Warnings identify incomplete coverage. When a status cannot be verified, the item keeps its last known status and is labelled **Last known activity**. Open it to check GitHub directly. Bots can also refresh the inbox and read current issue or pull request details through the Projects tools.
+
+Open an issue to read its description and the first 50 comments. **Ask a bot** starts a ShinBot conversation with the issue context. **Remind me** creates a one-time job linked to the issue; the bot follows up at your chosen time while ShinBot is running. Manage or pause reminders in Jobs. **Snooze 1 day** hides an item locally until tomorrow. Marking an item seen or snoozing it does not change GitHub notifications. Posting comments or changing GitHub issues uses the separate GitHub agent-tools plugin and requires approval.
+
+Projects opens in **Workspaces**, where your repository folders, coding tasks, worktrees and file reviews appear. The **Workspaces** and **GitHub inbox** tabs stay visible in both views. Switching between them preserves your selected repository and inbox filter.
+
+## Google Calendar
+
+Install and activate the optional **Calendar** plugin. In **Calendar → Connection settings**, enter a Google OAuth Web application client ID and client secret. Enable the Google Calendar API in that Google Cloud project and register the exact redirect URI shown in the form. Self-hosted installations need HTTPS; localhost HTTP is supported for development. If your Google consent screen is in testing mode, add your Google account as a test user; Google may expire testing refresh tokens after seven days.
+
+Select **Save and connect Google**, sign in on Google's site, and approve read-only Calendar access. Choose up to ten calendars using **Choose calendars**. The agenda includes Google events, issue reminders, and the next occurrence of enabled ShinBot jobs. Google events are expanded across the selected date range, including recurring and all-day events. Times use your browser's timezone. Event invitations, creation and editing are not supported by this read-only connection.
+
+Use **Disconnect account** to remove ShinBot's saved Google tokens. You can also revoke the application's access from your Google account. Calendar remains usable for local jobs when Google is disconnected or unavailable.
+
+## Enter and manage secrets
+
+Open **Settings → Secrets** to find credential forms for installed plugins and native connections. Fields are masked, saved values are not returned to the browser, and secrets are not inserted into conversations. Leave a saved password field blank to keep its value; use its remove control to delete it.
+
+Integration and plugin settings are encrypted with authenticated encryption in the control service's private `secrets` directory. Existing plugin-setting files migrate when they are next opened or used. Back up the vault together with its key. A missing key stops decryption instead of creating a replacement. The vault and key are included in full installation backups, so those backups must remain private. Encryption does not protect against someone who controls the server or has both the vault and key.
+
+Native GitHub inbox and Google Calendar credentials stay in the control service. Executable plugins receive their declared settings when they run in Computer. Those plugins share a trust boundary and must be trusted with their credentials. Literal credential echoes in plugin results are redacted before the executor stores them; transformed values and malicious plugins are not a secure isolation boundary. Model-provider credentials use the runtime's separate connection storage.
+
+## Connect an MCP server
+
+Open **Plugins → Connect MCP**. Give the connection a name and a short ID, then choose its transport:
+
+- **Local command (stdio)** runs an executable in the Computer service. Enter the command, such as `npx`, `uvx` or `python`, and its arguments as a JSON array. Use explicit package versions. The Computer image includes Node, npm, uv and Python.
+- **Streamable HTTP** connects to an MCP endpoint such as `https://example.com/mcp`.
+- **SSE** connects to a server that uses the older SSE transport.
+
+Enter credentials in the environment variables or headers field as a JSON object. For example, a remote server may need `{"Authorization":"Bearer YOUR_TOKEN"}`. Keep tokens out of the URL, command arguments and chat. OAuth sign-in for remote MCP servers is not supported yet.
+
+Choose the bots that can use the connection, then select **Connect and inspect tools**. This starts the command or contacts the endpoint to discover its tools. Review the tool list before activating the connection. Start a new chat to use it. MCP calls from direct connections require approval. Connections are short-lived: each tool call opens a new session and stdio starts a fresh process. Use servers that keep required state outside the connection or process. Tokens embedded in paths or arguments are not protected settings; use headers or environment variables instead. A connection supports up to 100 tools; large tool catalogs use more model context.
+
+ShinBot saves the discovered schemas with the connection version. If the server changes its tools or inputs, reconnect it with a new version and review the changes. Use **Configure** to replace saved credentials without changing the connection. Local commands and plugins share the Computer workspace and network access, so run code you trust. Review the server's license and dependencies before installation.
+
+## Install Agent Skills
+
+Open **Plugins → Install skills** and paste a [Skills CLI](https://github.com/vercel-labs/skills) command:
+
+```sh
+npx skills add owner/repo --skill skill-name
+```
+
+Choose the license stated by the skill author and the bots that should use it. For public GitHub sources, ShinBot resolves the repository to a commit before running its pinned, unmodified Skills CLI in the Computer service. The imported files must match that revision, and ShinBot preserves the applicable license and notice files. It stages copies of `SKILL.md` and accompanying text files for review. Installing does not run bundled scripts. Activate the skill, then start a new chat. The bot sees its description and can load its instructions and references when relevant.
+
+Use `--skill NAME` to select specific skills. A batch can contain up to 20 skills and 350 KB of text, with up to 90 files per skill. Binary files, hidden files and symlinks are not accepted. The package must include the actual upstream license text; a license name alone is insufficient. Skills with missing, conflicting or unrecognized licenses need a host review. Local imports should include the applicable repository license alongside `SKILL.md`. Keep the author's license and notice files with any skill you redistribute.
+
+You can also install a skill on your own computer and import it:
+
+```sh
+npx skills add owner/repo --skill skill-name --agent codex --copy --yes
+shinbot plugins import-skill .agents/skills/skill-name MIT --bot BOT_ID
+```
+
+Replace `MIT` with the skill's actual license. To run the same installation through ShinBot's Computer service:
+
+```sh
+shinbot plugins install-skills 'npx skills add owner/repo --skill skill-name' MIT --bot BOT_ID
+```
+
+Ask ShinBot to do this for you, for example:
+
+> Install the helpful-notes skill from my repository for this bot. Check its license and show me what it adds before activation.
+
+Ask the bot to read its plugin authoring guide before building an extension. The guide includes the current manifest schema, a working MCP example and the steps for testing, staging and activation.
+
+The bot can also write a new `SKILL.md` or plugin package, test it in Computer, stage the tested directory, and request activation. Installation and access changes initiated through its setup tools require approval. Credentials belong in the Plugins UI.
+
+## Import from another agent
+
+Choose **Import from a link** and paste a public GitHub repository, directory or file URL. ShinBot lists portable skills and Markdown command files, identifies their license notices, and pins the preview to a commit. Choose a file and its bot access, then stage it for review.
+
+Agent Skills retain their instructions and accompanying text files. Command files become skills with a small ShinBot wrapper; the original command remains in `references/original.md`. The wrapper does not install the original agent's hooks or run shell substitutions. **Review files** includes `SHINBOT-SOURCE.json`, which records the source, revision and content hash.
+
+For a Pi extension, OpenClaw plugin or another executable format, share the link in chat and ask ShinBot to inspect its interfaces, write an adapter, and test it. Some extensions require dependencies or host capabilities that the Computer image does not provide. ShinBot can prepare that work but cannot make arbitrary code compatible automatically. For private repositories, download the package yourself and use local installation. Other website links can be inspected through the browser.
+
+All imported content remains untrusted. Review its behavior, dependencies and full license terms before activation. A recognized license notice does not audit every file in a repository.
+
+## Learn from completed work
+
+When a bot solves a problem that is likely to recur, it can propose a skill containing the procedure and how to verify it. A proposal must cite successful tool actions from the same task. Its evidence file records action IDs and hashes without copying their arguments or results.
+
+Review the proposal in **Plugins → Review files**. It is initially available only to that bot. Activation uses the normal extension permission, and new conversations load the active version. Earlier versions remain available for rollback. Disabling a learned skill prevents the bot from automatically recreating that procedure under the same name.
+
+Learning is limited to one proposal per task and three per bot per day. Bots are instructed to save reusable methods, omit secrets and personal facts, and skip routine work. Evidence references show what the bot tested; they do not prove that the procedure is correct for every future task. Turn off **Let bots propose reusable skills** in Settings to disable this path.
+
+## Share extensions between bots
+
+Every installed skill, packaged plugin and MCP connection has a bot-access button. Choose **All bots** or **Selected bots**. New chats select the active versions available to their bot. Existing chats keep their versions, but removing access blocks subsequent calls and skill reads immediately.
+
+```sh
+shinbot plugins access my-server --bot BOT_ID
+shinbot plugins access skill-helpful-notes --shared
+```
+
+Bot access controls which instructions and tools ShinBot offers each bot. It does not create separate operating-system accounts or private Computer workspaces. Shell commands and executable plugins share the Computer user account; approved code can inspect other processes running under that account, including plugin credentials in use. Install executable code you trust and grant commands the same level of trust. Credentials for a shared connection refer to the same account. Create separate connection IDs when bots need different accounts.
+
+## Connect GitHub
+
+Stage **GitHub 1.0.0** from the official catalog, then choose **Configure**. Enter a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) and the repositories you want to connect, separated by commas, such as `your-name/project, your-name/notes`.
+
+Restrict the token to those repositories. Use **Contents: Read**, **Issues: Read** and **Pull requests: Read** for browsing. Give Issues or Pull requests write access only if you want ShinBot to create or update those items. Organization approval may be required. GitHub documents the [permissions for each REST endpoint](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens).
+
+Save, activate the plugin, and start a new conversation. Try:
+
+> Check my GitHub connection, then summarize the open issues in your-name/project.
+
+The plugin can read repository details, text files, issue conversations and pull-request changes. It can create issues, add comments, close or reopen issues, and create pull requests from existing branches. Writes ask for approval even with automatic Computer access, unless you saved an approval for that exact tool request. New pull requests default to drafts. It does not push commits, merge changes or delete repositories.
+
+You can also configure it from the host without putting the token in shell history:
+
+```sh
+shinbot plugins configure github 1.0.0
+```
+
+Credentials are saved in private files in the gateway’s data directory and passed to the selected plugin process when it runs. They are not shown in chat or returned by the settings API. Executable plugins share the Computer environment, so install only code you trust. Include the gateway data volume in backups and protect those backups as credentials.
+
+A saved token stays unchanged when its field is left blank. Use **Remove saved GitHub token** to clear it. If GitHub denies access, check the token’s expiration, selected repositories, permissions and organization approval. If GitHub does not confirm a write, ShinBot pauses the task for inspection. Check GitHub before resolving the uncertain action or trying again. A plugin installed from a different marketplace or changed local package needs its credentials entered again.
+
+## Telegram plugin
+
+The optional official [Telegram plugin](telegram.html) lets you chat with your bots from Telegram. Follow its setup guide to connect a BotFather bot and your private chat.
+
+## Ask ShinBot to extend itself
+
+For example:
+
+> Check the installed plugins and marketplace for a writing-style skill. If none fits, draft one that uses short paragraphs and checks claims. Show me the files before activation.
+
+ShinBot can create, test and stage skills or plugins using its tools. Executable activation requires the extension and Computer permissions. New capabilities are loaded into new conversations.
+
+## Add and share bot templates
+
+Templates save a bot's role, instructions, starter prompts, model choice and browser-sharing settings. Use Home to preview a template, import a bot or group, or export a setup you want to share.
+
+See [Bots, groups and templates](bots-and-templates.html#start-from-a-template) for importing and sharing, and [Publish bot templates](../developers/templates.html) for the repository format and validation commands.
+
+## Understand executable access
+
+Skill packages supply instructions and load on demand. MCP plugins execute code in the Computer service, with workspace and outbound network access. They do not receive mounted gateway databases, provider credentials, browser profiles or the Docker socket. A manifest's permission description is not an independent per-plugin network sandbox.
+
+Packaged Python MCP plugins use the installed Python and MCP dependencies. Direct command connections can also use Node, npm and uv in Computer; review any packages they download. Adding dependencies to a packaged Python plugin still requires a reviewed runner image and license audit. See [Build a plugin](../developers/plugins.html) for the supported manifest and runner contract.
+
+
+## Apps, themes and automatic workflows
+
+A custom plugin can add a sidebar page such as Paint, style ShinBot with a theme, or add a button beside the chat controls. Ask your bot to build one, test it and stage it for review, or install a package from a trusted marketplace. The bot can read ShinBot's plugin SDK through its built-in help.
+
+Plugins can also run hooks before a chat, before or after a tool call, and after a reply. These can add context, check a proposed action or record a finished workflow. Hooks run automatically with Computer access once you enable the plugin. The setup screen lists their events and permissions.
+
+Choose **All bots** or **Selected bots** to control where an extension is available. UI contributions follow the selected bot; tools and hooks follow the conversation's pinned version. Disable a plugin from Plugins to remove its pages and styles and stop future hook calls. Plugin data remains available when you enable it again.
+
+UI plugins have access to the signed-in app, so review their source before enabling them. If a plugin breaks the interface, open ShinBot with `?extensions=off` at the end of its root URL, then disable the plugin in Plugins. Reload normally after fixing or rolling back its version. This recovery option skips UI plugins only; disable the package to stop its hooks and tools too.

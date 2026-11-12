@@ -1,0 +1,12 @@
+export function browserSettings(settings, escape) {
+  return `<section class="settings-section" id="browser-panel" data-settings-panel="browser" role="tabpanel" aria-labelledby="browser-tab"><h2>Browser</h2><p class="muted">Choose the browser your bots use. Changes apply when the next browser session opens.</p><label>Default browser<select name="browser_backend">${[['chromium','Chromium'],['camoufox','Camoufox'],['agent-browser','agent-browser (Chromium)']].map(([id,name])=>`<option value="${id}" ${id===(settings.browser_backend||'chromium')?'selected':''}>${name}</option>`).join('')}</select></label><p class="hint">Chromium works with most websites. Camoufox uses Firefox with fingerprint protection. agent-browser uses Vercel’s automation tools with Chromium. Website checks can still apply.</p><p class="hint">Each browser keeps separate sign-ins for each bot profile. Switching back restores the saved profile.</p><label class="checkbox-row"><input name="browser_close_on_finish" type="checkbox" ${settings.browser_close_on_finish!==false?'checked':''}>Close the browser after a task finishes</label><p class="hint">Saved sign-ins stay available. A browser you have taken over stays open.</p><div id="browser-availability" role="status"><p class="muted">Checking installed browsers…</p></div></section>`;
+}
+
+export async function browserAvailability(api, escape, current) {
+  let result;
+  try { result=await api('/api/browser/backends'); }
+  catch { if(current())document.querySelector('#browser-availability').innerHTML='<p class="hint">The browser service is unavailable. Start it to check installed browsers.</p>';return; }
+  if(!current())return;
+  const container=document.querySelector('#browser-availability');if(!container)return;
+  container.innerHTML=`${result.desktop ? '<p class="hint">Your bots work in a Linux desktop. Open Computer to see it, manage files or take control.</p>' : ''}<h3>Installed browsers</h3>${result.backends.map(b=>`<div class="list-item"><div class="row between"><strong>${escape(b.name)}</strong><span class="pill ${b.ready?'completed':''}">${b.ready?'Ready':'Setup needed'}</span></div>${b.ready?'':`<details><summary>Installation instructions</summary><p class="hint">Run this on the host that runs ShinBot’s browser service, using the same Python environment. agent-browser’s npm installer requires Node.js 24 or newer.</p><pre>${escape(b.setup)}</pre><p class="hint">Then return to Settings. For Docker, see the browser options in the documentation.</p></details>`}</div>`).join('')}`;
+}

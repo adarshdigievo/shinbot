@@ -1,0 +1,9 @@
+services:
+  fixture:
+    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a1-control
+    command: ["uvicorn", "fixture_model:app", "--app-dir", "/fixtures", "--host", "0.0.0.0", "--port", "8888"]
+    volumes: ["../tests:/fixtures:ro"]
+    networks: [runtime-net, browser-net]
+  runtime:
+    environment:
+      SHINBOT_FIXTURE_URL: http://fixture:8888/v1

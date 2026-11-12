@@ -1,0 +1,254 @@
+---
+title: Write a plugin
+execute:
+  enabled: false
+---
+
+A plugin is a versioned directory. Use a skill for instructions, MCP for tools, or an extension for sidebar pages, themes, UI patches and lifecycle hooks. Extensions can include MCP tools in the same package. Channel plugins run as separately managed services and need host integration.
+
+## A skill package
+
+```text
+plugins/writing-style/
+  shinbot-plugin.json
+  SKILL.md
+  LICENSE
+```
+
+```json
+{
+  "schema_version": 1,
+  "id": "writing-style",
+  "name": "Writing style",
+  "version": "1.0.0",
+  "description": "Apply a personal writing guide.",
+  "kind": "skill",
+  "license": "MIT",
+  "files": ["SKILL.md", "LICENSE"]
+}
+```
+
+Write clear instructions in `SKILL.md`: when to use the skill, the information it needs, the steps to follow and how to check the result. Skills load on demand. Include a complete license in `LICENSE`.
+
+## An MCP tool
+
+The Python runner has the standard library and MCP dependencies available. This example normalizes whitespace without touching files or the network.
+
+`server.py`:
+
+```python
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("Text tools")
+
+
+@mcp.tool()
+def normalize(text: str) -> str:
+    """Collapse repeated whitespace in text."""
+    return " ".join(text.split())
+
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+`shinbot-plugin.json`:
+
+```json
+{
+  "schema_version": 1,
+  "id": "text-tools",
+  "name": "Text tools",
+  "version": "1.0.0",
+  "description": "Normalize whitespace in text.",
+  "kind": "mcp",
+  "license": "MIT",
+  "files": ["server.py", "LICENSE"],
+  "entrypoint": "server.py",
+  "tools": [{
+    "name": "normalize",
+    "description": "Collapse repeated whitespace in text.",
+    "input_schema": {
+      "type": "object",
+      "properties": {"text": {"type": "string"}},
+      "required": ["text"]
+    }
+  }]
+}
+```
+
+Activation checks the running MCP server's tool list against the manifest. Tool names must be unique lowercase identifiers. The namespaced form `plg__<plugin-id>__<tool-name>` must fit within 64 characters.
+
+The `files` list must match the package exactly, excluding the manifest itself. Packages cannot contain symlinks, hidden files or paths outside the directory. The package limit is 2 MB, with at most 100 declared files and 100 tools.
+
+## Credentials and settings
+
+Declare a `configuration` array when a tool needs an API token or an account setting:
+
+```json
+"configuration": [
+  {
+    "key": "SHINBOT_PLUGIN_EXAMPLE_TOKEN",
+    "label": "API token",
+    "description": "Create a token for the account you want to connect.",
+    "secret": true,
+    "required": true
+  }
+]
+```
+
+Keys must begin with `SHINBOT_PLUGIN_` and use uppercase letters, digits and underscores. The UI and `shinbot plugins configure PLUGIN VERSION` prompt for these fields. Required values must be set before MCP activation. Read them from the plugin process environment, not tool arguments. Do not print them or include them in exceptions.
+
+The gateway stores settings outside the Computer workspace, in an authenticated-encryption vault readable only by the gateway user. The vault key is stored in a separate mode-0600 file in the same control volume; host administrators and full backups can access both. Legacy JSON settings migrate on use. Native GitHub inbox and Google Calendar requests resolve their credentials inside the control service. It passes only the selected plugin’s declared settings to its process. Settings are shared by versions from the same marketplace and excluded from task arguments and executor journal payloads. A local package is bound to its exact content hash and must be configured again when it changes. A different marketplace or local replacement cannot inherit another source’s credentials. This does not isolate mutually untrusted plugins running under the shared Computer identity.
+
+Set `"requires_confirmation": true` on a manifest tool to require owner approval even with automatic Computer access. An owner can remember an approval for matching arguments from chat. The GitHub plugin uses this for all write operations. A plugin can return an MCP `CallToolResult` with `isError: true` and `_meta: {"shinbot_outcome": "uncertain"}` when an external write may have completed without acknowledgement. The Computer records an uncertain receipt and pauses the task for owner review. Use ordinary MCP errors for rejected inputs that did not cause a change. Inspect `marketplaces/official/plugins/github/` for a complete example using the existing HTTPX and MCP dependencies.
+
+## Test and activate
+
+```sh
+shinbot plugins install /path/to/text-tools
+shinbot plugins activate text-tools 1.0.0
+```
+
+Start a new conversation and ask for a small test with a known result. Executable activation requires extension and Computer permission and a completed security scan with no high or critical findings. Scan reports are tied to the exact package digest, scanner version and ShinBot policy. Check failures, timeouts, malformed input and interrupted execution before sharing a tool that changes external state.
+
+ShinBot pins active versions when a conversation starts. Publishing a newer version does not change a running conversation. Disable a plugin with `shinbot plugins disable text-tools` to block further calls, including calls from existing conversations. Activate a previously installed version to roll back.
+
+## Publish a marketplace
+
+Put packages under `plugins/<id>/` in a GitHub repository. From a ShinBot source checkout, generate the catalog:
+
+```sh
+uv run python scripts/build_marketplace.py /path/to/your-shinbot-plugins
+```
+
+Commit the packages, license and generated `shinbot-marketplace.json` to your repository. Users can add it with:
+
+```sh
+shinbot marketplace add your-name/your-shinbot-plugins
+```
+
+The catalog records each package ID, version, directory and content hash. Refresh resolves a repository commit and verifies the package against that hash. Never change the bytes of a released plugin version; publish a new version instead.
+
+The official repository is [shinbot-official-plugins](https://github.com/adarshdigievo/shinbot-official-plugins). Submit a pull request with a small purpose, clear instructions, a license and a way to reproduce the tool's behavior. Public personal repositories use the same format.
+
+## Execution and dependencies
+
+Executable plugins run in the Computer with access to its workspace and outbound network. They do not receive mounted gateway data, provider credentials, browser profiles or the Docker socket. This is a shared trust boundary: it is not a separate VM or per-plugin network sandbox.
+
+The manifest's `requires` list must be empty in the default runner. Additional dependencies need a host license review and a prepared runner image. A plugin cannot install arbitrary packages into the gateway or runtime. Supported manifest license identifiers are `MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `0BSD`, `Unlicense` and `CC0-1.0`.
+
+ShinBot can write, test and stage its own skills and tools. Activation remains a reviewed change; newly activated tools become available in a new conversation.
+
+## Direct MCP connections and standard skills
+
+`POST /api/plugins/mcp/connect` accepts `id`, `name`, `version`, `server` and `access`. `server` selects `stdio` with `command`, `args` and `env`, or `http`/`sse` with `url` and `headers`. Discovery runs in the unprivileged Computer worker. ShinBot stores schemas in an immutable plugin manifest and saves credentials separately. Reconnecting with changed configuration or schemas requires a new version. Direct MCP tools require confirmation.
+
+`POST /api/plugins/skills/install` accepts a `command` such as `npx skills add owner/repo --skill NAME`, the verified upstream `license`, and `access`. The pinned Skills CLI runs in a temporary workspace directory. Its text files become an immutable skill package; their content hash determines the version. `POST /api/plugins/skills/import` accepts a text `files` map instead for host-side imports. Neither import path executes skill scripts.
+
+Use `PUT /api/plugins/{id}/access` with `{"mode":"shared","bots":[]}` or `{"mode":"bots","bots":["BOT_ID"]}`. Access is stored separately from the package. Task creation selects available versions, and dispatch checks current access again. The `plugins read_skill` agent tool checks both task selection and current bot access before returning instructions or reference files. This is routing control within a trusted single-owner installation, not process isolation.
+
+Agent tool schemas live in `runtime/src/tools.ts`; orchestration and approval checks live in `src/shinbot/core.py`. Keep those schemas, system instructions and setup endpoints aligned when adding capabilities. `bots save_template` validates and stores portable profiles in the local template library. Saving a template does not publish it to a repository.
+
+## Native toolkits
+
+Projects and Kanban use `kind: builtin`. Their backend operations and UI are shipped with ShinBot, while their manifests are distributed in the official marketplace and installed explicitly. A native package must match the bundled files byte for byte. Custom packages use `kind: extension` for their own UI and hooks, or MCP and skills for tools and instructions. Native toolkit code changes currently require a ShinBot release.
+
+The Projects toolkit owns repository registration, worktree lifecycle and delegation policy. Core task records carry working-directory and parent-task references so ordinary file tools, commands, cancellation and durable scheduling apply to project work. Git operations run under the Computer worker identity. Repository registration and worktree creation do not execute setup scripts or install project dependencies.
+
+
+## Sidebar apps, themes and UI patches
+
+Use `kind: extension`. The following fields add a Paint page, its stylesheet and a composer shortcut. Include each referenced file in the top-level `files` array, along with `LICENSE`.
+
+```json
+{
+  "permissions": ["ui.pages", "ui.styles", "ui.patch"],
+  "ui": {
+    "pages": [{"id": "canvas", "title": "Paint", "icon": "pencil", "entrypoint": "paint.js"}],
+    "styles": ["paint.css"],
+    "patches": ["toolbar.js"],
+    "assets": []
+  }
+}
+```
+
+A page exports `mount(root, sdk)`. ShinBot supplies a content element beneath the page title. A patch exports `activate(sdk)` and runs while the plugin is enabled for the selected bot. Both functions may be async and may return a cleanup function. Return cleanup for timers and subscriptions, and use `sdk.signal` for requests and event listeners. Check `sdk.signal.aborted` after awaiting work before touching the interface.
+
+```javascript
+export function activate(sdk) {
+  const button = document.createElement('button');
+  button.textContent = 'Review';
+  button.onclick = () => sdk.compose('Review the current changes and report the checks you ran.');
+  return sdk.mount('composer-actions', button);
+}
+```
+
+The UI SDK provides:
+
+| API | Use |
+| --- | --- |
+| `sdk.plugin`, `sdk.botId`, `sdk.taskId` | Plugin identity, selected bot and current conversation |
+| `sdk.storage.get(key)`, `sdk.storage.set(key, value)`, `sdk.storage.delete(key)` | Persistent JSON storage per plugin and bot, retained across version changes |
+| `sdk.asset(path)` | URL for a declared package asset |
+| `sdk.api(path, method, body)` | Authenticated ShinBot API requests |
+| `sdk.compose(text)` | Open an unsent chat draft for the current bot |
+| `sdk.navigate(view)` | Open a core page or `plugin/PLUGIN_ID/PAGE_ID` |
+| `sdk.toast(text, isError)` | Show feedback |
+| `sdk.on(event, handler)` | Subscribe to `navigate`, `snapshot` or `appearance`; returns an unsubscribe function |
+| `sdk.mount(slot, element)` | Mount an element in `composer-actions`, `sidebar-footer` or `topbar`; returns cleanup |
+| `sdk.signal` | Abort signal for the page or patch lifetime |
+
+Mounted slot elements follow page rerenders and are removed on disable or a bot change. A page's scope ends when the user leaves it. `navigate` events contain `view`, `botId` and `taskId`; `snapshot` contains the task and notification snapshot; `appearance` contains `preference` and `theme`.
+
+Styles are ordinary CSS. Use ShinBot's variables such as `--paper`, `--surface`, `--ink` and `--accent`, and use `[data-theme="light"]` and `[data-theme="dark"]` to respect the owner's appearance choice. Scope page styles to `[data-plugin="YOUR_ID"]`. A theme plugin can override the variables globally. A stylesheet applies while its plugin is enabled; disabling it restores the underlying theme.
+
+Page and patch entrypoints must be JavaScript modules. Declare imported helpers, images, fonts and JSON files in `ui.assets`. Only declared UI assets are served, and asset requests check activation and bot access. Storage keys use letters, numbers, underscores and hyphens. Values are limited to 200 KB, with 2 MB total and 200 keys per plugin and bot. Use Computer files through a tool for larger documents.
+
+UI modules and styles are trusted app code. They run in the signed-in app, can read or change its interface, and can call its APIs. Bot scoping controls when code is loaded; it does not sandbox a plugin after execution. The activation screen explains this access. Avoid global side effects at module import time and clean up everything created by `activate`. A clean page reload removes a disabled plugin's loaded JavaScript. Open `/?extensions=off` to skip every plugin UI contribution, then disable or roll back the faulty version in Plugins. The query affects that browser session's UI only; it does not disable server hooks or tools.
+
+Optional packages in `examples/plugins/paint`, `examples/plugins/ocean-theme` and `examples/plugins/workflow-hooks` demonstrate a saved drawing, a theme and a composer shortcut. Install them with the usual CLI commands. None is installed automatically.
+
+## Chat and tool hooks
+
+Declare handlers alongside UI or tools, or in an extension containing only hooks:
+
+```json
+{
+  "permissions": ["hooks"],
+  "hooks": [
+    {"event": "before_chat", "entrypoint": "hooks.py", "timeout": 10},
+    {"event": "before_tool", "entrypoint": "hooks.py", "timeout": 10},
+    {"event": "after_tool", "entrypoint": "hooks.py", "timeout": 10},
+    {"event": "after_response", "entrypoint": "hooks.py", "timeout": 10}
+  ]
+}
+```
+
+Each Python entrypoint exports a synchronous `handle(event, context)` function. It receives `event_id`, `task_id`, `bot_id`, `data` and a persistent `data_dir` under the Computer workspace. Declare credentials through `configuration`; only that plugin's settings are supplied to its process. Return a JSON object or `None`.
+
+| Event | `context["data"]` | Allowed return fields |
+| --- | --- | --- |
+| `before_chat` | Submitted `content`, accumulated `context` text | `context` to supply model instructions; `block` with a reason to stop the turn |
+| `before_tool` | `tool`, `args` | `args` to replace arguments; `block` with a reason to stop the call |
+| `after_tool` | `tool`, `args`, completed `result` | `result` to replace the result given to the model |
+| `after_response` | `answer`, `status`, `error` | Empty object; observe the finished turn without replacing its answer |
+
+```python
+def handle(event, context):
+    data = context["data"]
+    if event == "before_chat":
+        return {"context": data["context"] + "\nReport which checks actually ran."}
+    if event == "before_tool" and data["tool"] == "run_command":
+        if "git push --force" in data["args"].get("command", ""):
+            return {"block": "This workflow does not allow force pushes."}
+    return {}
+```
+
+The string check above illustrates a hook, not a shell security policy. ShinBot still evaluates approvals after a hook changes arguments. A hook result cannot approve an action or change the selected tool. `before_tool` and `after_tool` wrap completed tool calls throughout the model's tool loop. Failed or denied tools do not trigger `after_tool`.
+
+Hooks run in deterministic plugin-ID order, using the versions pinned to the conversation. Later hooks see earlier changes. New conversations select newly activated versions. Removing bot access or disabling a plugin stops its future hooks and tool calls. A hook already executing can finish.
+
+Computer records an invocation before running it and reuses completed results after reconnects and restarts. An interrupted invocation is marked uncertain and is not executed again automatically. Before-hook failures stop the turn or tool with a reason. After-hook failures leave the original tool result or answer available and create a plugin event. Use the stable `event_id` as an idempotency key when calling another service: no local journal can guarantee an external system's outcome after a lost connection.
+
+Hooks have Computer file and network access and run automatically once activated. Activation grants that execution; their internal operations do not each produce a chat approval. Keep them short, use the existing runtime dependencies, and set a timeout between 1 and 60 seconds. Return at most 200 KB. Context and blocking text are limited to 20,000 characters.

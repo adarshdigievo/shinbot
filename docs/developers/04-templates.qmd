@@ -1,0 +1,87 @@
+---
+title: Publish bot templates
+execute:
+  enabled: false
+---
+
+A template shares a bot's configuration without sharing the owner's conversations, memories, workspace, credentials or browser state. Templates describe either one bot or a group of bots.
+
+## Repository layout
+
+```text
+shinbot-templates.json
+LICENSE
+templates/
+  research-pair/
+    template.json
+```
+
+`template.json`:
+
+```json
+{
+  "schema_version": 1,
+  "id": "research-pair",
+  "version": "1.0.0",
+  "name": "Research pair",
+  "description": "Research and writing for a shared project.",
+  "kind": "group",
+  "license": "MIT",
+  "profiles": [
+    {
+      "name": "Researcher",
+      "instructions": "Check primary sources and save findings in the notebook.",
+      "starters": ["Help me research a topic and keep a source list."],
+      "browser": "group"
+    },
+    {
+      "name": "Writer",
+      "instructions": "Turn shared research notes into a draft. Preserve source links.",
+      "browser": "group"
+    }
+  ]
+}
+```
+
+Use `kind: "bot"` with exactly one profile for an individual template. A group can contain up to 12 profiles.
+
+## Profile fields
+
+| Field | Meaning |
+| --- | --- |
+| `name` | Required name, up to 80 characters |
+| `color` | `blue`, `teal`, `amber`, `rose`, `violet` or `slate`; omit it to assign a colour during import |
+| `description` | Short role description, up to 500 characters |
+| `instructions` | Working instructions, up to 12,000 characters |
+| `starters` | Up to six nonempty prompts, each up to 1,000 characters |
+| `browser` | `private`, `group` or `shared`; defaults to `private` |
+| `provider`, `model` | Set both for a model override, or omit both to inherit the installation's model |
+
+Group browser sharing requires a group template. Imports use private or newly created group profiles by default. Access to existing shared sign-ins requires an explicit choice in the import preview. Importing a template does not grant permissions or enable scheduled jobs.
+
+Template IDs use lowercase letters, numbers and hyphens, beginning with a letter. Versions use `MAJOR.MINOR.PATCH`. Include an accepted license, such as MIT, and the corresponding license text. Unknown fields are rejected so spelling mistakes do not silently change behavior.
+
+## Validate and share
+
+From a ShinBot source checkout:
+
+```sh
+uv run python scripts/build_templates.py /path/to/your-bot-templates
+```
+
+The builder validates every `templates/*/template.json` and writes `shinbot-templates.json` with paths and SHA-256 hashes. Commit that catalog with the templates. Users can add the repository from Home or run:
+
+```sh
+shinbot bots add-repository your-name/your-bot-templates
+```
+
+You can also export an existing bot and import the file directly:
+
+```sh
+shinbot bots export BOT_ID ./template.json
+shinbot bots import ./template.json
+```
+
+Read the instructions before sharing an export: configuration can still contain names or private information that someone typed into a profile. Test with a new installation, check that inherited model settings work, and keep shared-browser access optional.
+
+Submit official templates through pull requests to [shinbot-official-templates](https://github.com/adarshdigievo/shinbot-official-templates). Starter examples are included in the ShinBot checkout under `marketplaces/templates/`.

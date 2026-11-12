@@ -1,0 +1,54 @@
+---
+title: "Bots, groups and templates"
+guide-section: "Using ShinBot"
+execute:
+  enabled: false
+---
+
+Use different bots for recurring kinds of work, such as research, writing and planning. A bot profile contains its name, description, instructions, starter prompts, model override and browser-sharing choice. Each bot has its own conversation history and saved memories.
+
+## Create a bot
+
+On Home, choose **Create bot**. Give it a name and describe how it should help. Select a group if you want to organize it with related bots. Role and browser changes apply to new conversations.
+
+New bots receive a random colour from six options, favouring colours your other bots use least. To change it, choose **Edit** on the bot’s Home card, select a **Bot colour**, and save. The colour appears in the sidebar, profile card and chats, and stays saved across devices and restarts.
+
+Notebook pages and Computer workspace files are shared across the installation. Separate bot profiles do not create separate human accounts or filesystem sandboxes.
+
+## Choose browser sharing
+
+| Choice | Cookies and website sign-ins |
+| --- | --- |
+| Just this bot | A private persistent browser profile for this bot |
+| This group | One profile shared by bots in the group |
+| All bots | The installation's shared browser profile |
+
+The browser service has one interactive display and serializes browser work. It opens profiles on demand and preserves their cookies when switching. A private browser profile is a separate login store, not a separate virtual machine.
+
+## Start from a template
+
+Home lists bundled templates. Open a preview to inspect its profiles, instructions and sharing choices before importing it. Templates can describe one bot or a group of bots.
+
+The official catalog is [adarshdigievo/shinbot-official-templates](https://github.com/adarshdigievo/shinbot-official-templates). Add a personal repository with **Template repository** or:
+
+```sh
+shinbot bots add-repository your-name/your-bot-templates
+```
+
+## Share a template
+
+Use **Share template** on a bot or **Export group template** for a group. The CLI supports individual exports:
+
+```sh
+shinbot bots list
+shinbot bots export BOT_ID ./template.json
+shinbot bots import ./template.json
+```
+
+Exports contain configuration, not conversations, memories, files, credentials or browser cookies. Read the instructions for private details before sharing. Imports do not grant permissions or start jobs. Access to shared sign-ins requires an explicit choice; otherwise imports use a private browser or a new group.
+
+To contribute a reusable template, see [the template authoring guide](../developers/templates.html) and submit a pull request to the official repository.
+
+## Save a template with your bot
+
+Ask a bot to export its current profile or group, then save the result as a local template with a name and version. It asks for approval before saving. The template appears in Home under **Saved templates** and can be installed again. The export contains profile settings and instructions, not conversations, memories or account credentials. Publishing to a repository or submitting a pull request is a separate action.

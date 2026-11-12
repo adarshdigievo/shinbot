@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "id": "workflow-hooks",
+  "name": "Workflow hooks",
+  "version": "1.0.0",
+  "description": "Adds chat guidance, a force-push guard and a review shortcut.",
+  "kind": "extension",
+  "license": "MIT",
+  "permissions": [
+    "hooks",
+    "ui.patch"
+  ],
+  "ui": {
+    "patches": [
+      "toolbar.js"
+    ]
+  },
+  "hooks": [
+    {
+      "event": "before_chat",
+      "entrypoint": "hooks.py",
+      "timeout": 5
+    },
+    {
+      "event": "before_tool",
+      "entrypoint": "hooks.py",
+      "timeout": 5
+    },
+    {
+      "event": "after_tool",
+      "entrypoint": "hooks.py",
+      "timeout": 5
+    },
+    {
+      "event": "after_response",
+      "entrypoint": "hooks.py",
+      "timeout": 5
+    }
+  ],
+  "files": [
+    "LICENSE",
+    "hooks.py",
+    "toolbar.js"
+  ]
+}

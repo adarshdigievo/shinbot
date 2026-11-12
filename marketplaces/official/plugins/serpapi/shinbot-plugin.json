@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "id": "serpapi",
+  "name": "SerpApi",
+  "version": "1.0.0",
+  "description": "Search the web, retrieve YouTube transcripts, and use SerpApi engines with your own key.",
+  "kind": "mcp",
+  "license": "MIT",
+  "files": [
+    "LICENSE",
+    "server.py"
+  ],
+  "entrypoint": "server.py",
+  "permissions": [
+    "network-search"
+  ],
+  "configuration": [
+    {
+      "key": "SHINBOT_PLUGIN_SERPAPI_KEY",
+      "label": "SerpApi API key",
+      "description": "Get your key from serpapi.com/dashboard. Each tool call makes one search request; usage depends on your plan.",
+      "secret": true,
+      "required": true
+    }
+  ],
+  "tools": [
+    {
+      "name": "search",
+      "description": "Run one SerpApi search. Check official engine docs for parameters. Returns bounded JSON; never paginates automatically.",
+      "input_schema": {
+        "properties": {
+          "engine": {
+            "title": "Engine",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "limit": {
+            "default": 5,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "engine",
+          "parameters"
+        ],
+        "title": "searchArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "web_search",
+      "description": "Search the web with Google Light. Returns titles, source links and snippets.",
+      "input_schema": {
+        "properties": {
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "limit": {
+            "default": 5,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "country": {
+            "default": "us",
+            "title": "Country",
+            "type": "string"
+          },
+          "language": {
+            "default": "en",
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "web_searchArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "youtube_transcript",
+      "description": "Read a YouTube transcript with timestamps. Use next_start_ms for the next segment. Missing captions are reported as an error.",
+      "input_schema": {
+        "properties": {
+          "video": {
+            "title": "Video",
+            "type": "string"
+          },
+          "language_code": {
+            "default": "en",
+            "title": "Language Code",
+            "type": "string"
+          },
+          "start_ms": {
+            "default": 0,
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 100,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "video"
+        ],
+        "title": "youtube_transcriptArguments",
+        "type": "object"
+      }
+    }
+  ]
+}

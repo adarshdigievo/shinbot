@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=X-XFCE-Helper
+Name=ShinBot Browser
+Icon=web-browser
+X-XFCE-Category=WebBrowser
+X-XFCE-Binaries=shinbot-open-browser;
+X-XFCE-Commands=shinbot-open-browser;
+X-XFCE-CommandsWithParameter=shinbot-open-browser "%s";

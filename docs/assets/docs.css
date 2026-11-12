@@ -1,0 +1,14 @@
+:root { --gd-accent: #0866d9; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.navbar-logo { width: 34px; height: 34px; max-height: 34px; object-fit: contain; border-radius: 8px; background: #fff; }
+.navbar-title { font-weight: 700; letter-spacing: -.035em; border: 0; padding-inline: 0; }
+h1, h2, h3 { letter-spacing: -.025em; }
+main p, main li { line-height: 1.7; }
+main img { max-width: 100%; }
+.callout { border-radius: 8px; }
+.quarto-dark { --gd-accent: #83b4ff; }
+.quarto-dark #quarto-header .navbar { background: #0d141e; }
+.quarto-dark #quarto-header .navbar :is(.navbar-title, .nav-link, .quarto-navbar-tools a) { color: #e9eff8; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--gd-accent); outline-offset: 3px; }
+#quarto-sidebar a.sidebar-item-text.sidebar-link.active { color: var(--gd-accent); text-decoration-color: var(--gd-accent); }
+main a:not(.btn):not(.anchorjs-link) { color: var(--gd-accent); }

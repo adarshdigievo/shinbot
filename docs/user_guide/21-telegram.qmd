@@ -1,0 +1,50 @@
+---
+title: "Telegram plugin"
+guide-section: "Extending ShinBot"
+execute:
+  enabled: false
+---
+
+The official Telegram plugin lets you chat with your ShinBot profiles from a private Telegram chat. Set it up when you want this connection. It runs as a separate service and uses your existing bots, model settings and permissions.
+
+## Configure the connection
+
+1. Create a Telegram bot with [BotFather](https://t.me/BotFather).
+2. Obtain your numeric Telegram user ID.
+3. On the ShinBot host, run:
+
+```sh
+shinbot telegram-setup
+```
+
+The interactive command asks for the bot token and owner ID, verifies the Telegram bot, then starts the connector. Use a dedicated BotFather bot without an existing webhook. From a source checkout, use `uv run shinbot telegram-setup --build`.
+
+Keep the token private. Only the configured owner ID can use this connector. Model requests still use your configured provider and task permissions.
+
+## Chat with your bots
+
+Open the Telegram link printed by setup and send `/start`. Only your configured private chat is accepted. Group chats and messages from other users are ignored.
+
+| Command | What it does |
+| --- | --- |
+| `/start` or `/help` | Show the available commands |
+| `/bots` | List your ShinBot profiles and their IDs |
+| `/bot NAME` or `/bot ID` | Switch profiles; your next message starts a new conversation |
+| `/new` | Start a new conversation with the selected profile |
+| `/status` | Show the selected bot and conversation status |
+
+Send an ordinary text message to work with the selected bot. Profile selection survives connector restarts. These conversations use the same model settings, saved memories and permissions as the web app. When an action needs approval, Telegram sends a link to your ShinBot instance. Photos, attachments and voice messages are not supported.
+
+Scheduled jobs with notifications enabled also send their results to your configured private chat. Long replies are split into multiple messages without truncating the answer.
+
+To stop the connection without deleting history or settings:
+
+```sh
+shinbot telegram-stop
+```
+
+## Delivery and recovery
+
+Conversations and complete replies remain available in the web app. If delivery fails or its outcome is uncertain, check the Telegram chat before sending the message again. ShinBot preserves delivery records across restarts.
+
+Changing the connected Telegram account stops pending delivery to the old account. If messages stop arriving, run `shinbot status` and inspect the connector logs.

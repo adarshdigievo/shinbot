@@ -1,0 +1,32 @@
+---
+title: "Remote access and permissions"
+guide-section: "Operating your server"
+execute:
+  enabled: false
+---
+
+## Use an SSH tunnel
+
+The gateway binds to loopback by default. On your local computer:
+
+```sh
+ssh -N -L 8765:127.0.0.1:8765 user@your-server
+```
+
+Open `http://localhost:8765`. The browser interface talks to the remote installation through the tunnel. Only the host's SSH service needs remote exposure.
+
+## Use an HTTPS reverse proxy
+
+Set `SHINBOT_ORIGIN` in the host's `~/.shinbot/deploy.env` to the exact public HTTPS origin. Adjust `SHINBOT_BIND` deliberately if the proxy needs a different bind address. Run `shinbot start` after changes.
+
+The proxy must forward WebSocket connections and avoid buffering event streams. Expose only the gateway. Keep the runtime, Computer, browser and VNC services on private container networks. Do not use an unauthenticated proxy to bypass the gateway's login or origin checks.
+
+## Authentication
+
+Browser sessions use HttpOnly cookies and origin checks. CLI sessions use bearer tokens. **Settings → Accounts → Sign out all devices** revokes both kinds of session. A local administrator can read container volumes, so host access remains part of the security boundary.
+
+## Standing permissions
+
+Settings separates command execution, browser interaction and extension activation. Keep approvals enabled while learning what a bot or plugin does. Executable plugins have workspace and network access; browser permission can act through accounts you have signed into.
+
+ShinBot is a single-owner application. Giving another person the workspace password gives them access to that owner's workspace, not a restricted team account.

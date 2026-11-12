@@ -1,0 +1,95 @@
+---
+title: CI and releases
+execute:
+  enabled: false
+---
+
+GitHub Actions checks pull requests and builds releases from a GitHub Release tag. PyPI publishing uses GitHub's OIDC identity. Docker Hub publishing uses a scoped access token. Pull requests receive neither publishing credential.
+
+## Configure the repository
+
+### GitHub Pages
+
+In **Settings → Pages**, choose **GitHub Actions** as the source. Configure the `github-pages` environment to allow release tags matching `v*`.
+
+The project site is `https://adarshdigievo.github.io/shinbot/`. The landing page is at that root; Great Docs is at `https://adarshdigievo.github.io/shinbot/docs/`. This is a project site, so `/shinbot/` is part of both URLs.
+
+### PyPI trusted publishing
+
+Create a pending publisher for a new PyPI project, or add a trusted publisher to the existing project. Use these exact values:
+
+| Setting | Value |
+| --- | --- |
+| PyPI project | `shinbot` |
+| GitHub owner | `adarshdigievo` |
+| Repository | `shinbot` |
+| Workflow filename | `release.yml` |
+| Environment | `pypi` |
+
+Create the matching `pypi` environment in GitHub. Restrict deployment to release tags; add required reviewers if desired. No PyPI API token belongs in GitHub secrets. See [PyPI's publisher setup](https://docs.pypi.org/trusted-publishers/adding-a-publisher/).
+
+### Docker Hub
+
+Create the public repository `adarshidigievo/shinbot`. Create a Docker Hub personal access token with **Read & Write** access, without Delete access. Add these values to the GitHub `dockerhub` environment:
+
+| Type | Name | Value |
+| --- | --- | --- |
+| Actions variable | `DOCKERHUB_USERNAME` | `adarshidigievo` |
+| Actions secret | `DOCKERHUB_TOKEN` | The Docker Hub access token |
+
+Restrict the `dockerhub` environment to `v*` tags. Store the token only in that environment, not as a repository-wide secret. Rotate it through the environment's secrets; do not place it in workflow files or release notes.
+
+The Docker owner is **adarshidigievo**; the GitHub owner is **adarshdigievo**. Preserve that distinction when changing configuration.
+
+## What runs
+
+| Workflow | Trigger | Result |
+| --- | --- | --- |
+| `ci.yml` | Pull request, push to `main`, manual run, release caller | Python checks on Linux and macOS; runtime tests; browser journeys; wheel checks; isolated container integration |
+| `site-build.yml` | Called by Website checks or Release | Great Docs build, landing-page assembly and rendered-link checks |
+| `pages.yml` | Pull request, push to `main`, manual run | Validates the site without deploying it |
+| `release.yml` | Published GitHub Release | Checks the tag and versions; runs CI and site checks; publishes images, then PyPI, then the website and documentation |
+
+Actions use reviewed commit pins; the actionlint container uses a verified image digest. Python and runtime lockfiles are checked in. Documentation dependencies are isolated in the `docs` dependency group.
+
+## Prepare a version
+
+Work from a clean checkout. Update the synchronized version fields with:
+
+```sh
+uv run python scripts/release.py set-version 0.1.0a2
+uv lock
+uv run python scripts/release.py check
+```
+
+The helper updates the Python package, TypeScript package and lock root, both Compose files and the integration fixture's image tag. `uv lock` refreshes the Python lock metadata. It accepts stable versions such as `0.1.0` and prereleases such as `0.1.0a2`, `0.1.0b1` and `0.1.0rc1`.
+
+Review dependency/license changes, run CI and the site build, then commit the version change. Create a tag such as `v0.1.0a2` at that commit and publish a GitHub Release for it. Set GitHub's **prerelease** flag for `a`, `b` and `rc` versions. The release check rejects a mismatched flag or tag.
+
+## Published artifacts
+
+Every release produces a Python wheel and source archive, four core Docker images and an image for the optional Telegram plugin:
+
+```text
+adarshidigievo/shinbot:VERSION-control
+adarshidigievo/shinbot:VERSION-runtime
+adarshidigievo/shinbot:VERSION-computer
+adarshidigievo/shinbot:VERSION-browser
+adarshidigievo/shinbot:VERSION-telegram
+```
+
+Images are built for `linux/amd64` and `linux/arm64`, with build provenance and SBOM attestations. Container journeys run on the Linux CI host; cross-platform image builds do not replace native runtime testing on every architecture.
+
+BuildKit stores reusable layers in `buildcache-<service>` tags in the same Docker Hub repository. These tags are build caches, not runnable releases. They can be removed to reclaim storage; the next release will rebuild the layers.
+
+After PyPI publishing, a serialized promotion job checks the current latest release before updating `latest-control`, `latest-runtime`, `latest-computer`, `latest-browser` and `latest-telegram`. Prereleases keep versioned tags. The launcher uses the exact image set bundled with its package, never the mutable `latest-*` aliases.
+
+PyPI publishing waits for all image builds and pushes, so a newly installable package has its matching containers. Package attestations are produced by the PyPI publishing action.
+
+## Handle a failed release
+
+Inspect the failed job before retrying. A failed matrix can leave some versioned Docker tags published; rerun failed jobs to finish the set. PyPI versions cannot be overwritten. If a version is already published and needs different code, make a new release rather than moving its tag.
+
+The release workflow deploys the landing page and documentation built from the release tag after PyPI publishing succeeds. Pushes to `main`, pull requests and manual website checks do not publish anything. Each successful release deploys its tagged website, including prereleases. A website deployment can fail without unpublishing the package; rerun the failed deployment job. Use its deployment URL and test both the root and `/docs/`.
+
+For local troubleshooting, build `_site/` and run the same scripts used by CI. GitHub account settings, environment protections and registry permissions are only verified by an actual GitHub Actions run.

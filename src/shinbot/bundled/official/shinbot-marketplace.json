@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "name": "official",
+  "plugins": [
+    {
+      "id": "calendar",
+      "version": "1.0.0",
+      "name": "Calendar",
+      "description": "Connect Google Calendar with read-only browser sign-in. See events, issue reminders and upcoming ShinBot jobs in one agenda.",
+      "path": "plugins/calendar",
+      "sha256": "cedef848fe505c2e3d69b51787827303b31cabb1d098f9934e036f5aeab76ccd"
+    },
+    {
+      "id": "github",
+      "version": "1.0.0",
+      "name": "GitHub",
+      "description": "Read repository files, issues and pull requests. Create issues, comments and pull requests with your approval.",
+      "path": "plugins/github",
+      "sha256": "9867e17b997eafd5be9bd721f2dbcc4898612a87617bea43ccd502347fb8f588"
+    },
+    {
+      "id": "kanban",
+      "version": "1.0.0",
+      "name": "Kanban",
+      "description": "Keep goals on a persistent board. Let bots work in bounded runs and review their evidence.",
+      "path": "plugins/kanban",
+      "sha256": "6ac5fd1cd48f4870a19484b34d47989349755d9972c10452a6da155e605aaba5"
+    },
+    {
+      "id": "kanban",
+      "version": "1.1.0",
+      "name": "Kanban",
+      "description": "Keep goals on a persistent board, with run limits and optional token budgets. Review each bot\u2019s evidence.",
+      "path": "plugins/kanban-v1.1",
+      "sha256": "3e46f9eac4792176cd9416f46656fdd2402d96ee101830faa90c97493bc891ae"
+    },
+    {
+      "id": "projects",
+      "version": "1.0.0",
+      "name": "Projects",
+      "description": "Work on repositories with separate task worktrees. Delegate coding work to other bots and inspect files and changes.",
+      "path": "plugins/projects",
+      "sha256": "41497eae13f1058b621342ef18dd556b126d4339f53e81d00c5efc47c5bff0ad"
+    },
+    {
+      "id": "projects",
+      "version": "1.1.0",
+      "name": "Projects",
+      "description": "Follow GitHub repositories and organizations, review your issue inbox, ask bots about issues, and schedule follow-ups. Includes coding worktrees and delegation.",
+      "path": "plugins/projects-v1.1",
+      "sha256": "2923146a8be03f7ab405ff30343696234f486e20240aca6404efb5c412b5518a"
+    },
+    {
+      "id": "research",
+      "version": "1.0.0",
+      "name": "Research Skill",
+      "description": "Search public discussions, projects, papers, news and newsletters without API keys.",
+      "path": "plugins/research",
+      "sha256": "897e833c296ae8057d8755ac1baf1edcdbc4524a507e031a50819e6ff58fb99b"
+    },
+    {
+      "id": "serpapi",
+      "version": "1.0.0",
+      "name": "SerpApi",
+      "description": "Search the web, retrieve YouTube transcripts, and use SerpApi engines with your own key.",
+      "path": "plugins/serpapi",
+      "sha256": "b5de3016af582cdc5b5df576c4e4fbfba14009d6f39eb6697ed3da3cc83a73e4"
+    },
+    {
+      "id": "telegram",
+      "version": "1.1.0",
+      "name": "Telegram",
+      "description": "Chat privately with your ShinBot profiles, switch bots with /bot, and receive complete replies and job results.",
+      "path": "plugins/telegram",
+      "sha256": "b20aebb7781574bdebb65087288e4d0ec02e3abf4332b95d31f3177555b04cb6"
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "id": "research",
+  "name": "Research Skill",
+  "version": "1.0.0",
+  "description": "Search public discussions, projects, papers, news and newsletters without API keys.",
+  "kind": "mcp",
+  "license": "MIT",
+  "files": [
+    "LICENSE",
+    "SKILL.md",
+    "server.py"
+  ],
+  "entrypoint": "server.py",
+  "permissions": [
+    "network-search"
+  ],
+  "configuration": [],
+  "tools": [
+    {
+      "name": "sources",
+      "description": "List Research Skill sources, query formats and coverage. No keys or accounts needed. Prefer SerpApi for unsupported platforms, reliable general web search or date-filtered web results when configured.",
+      "input_schema": {
+        "properties": {},
+        "title": "sourcesArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "search",
+      "description": "Search public sources without keys. Choose source IDs from sources(); defaults to hacker_news and github_repositories. days=0 removes the date filter. DEV needs one tag; StockTwits one ticker. Partial failures are explicit. Web dates are unavailable. Each source returns at most limit results.",
+      "input_schema": {
+        "properties": {
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sources"
+          },
+          "days": {
+            "default": 30,
+            "title": "Days",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 5,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "searchArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "read_thread",
+      "description": "Read a bounded public discussion and comments. source: hacker_news (numeric item ID), reddit (post ID), or github_issues (owner/repo#number). Returns excerpts, not a complete thread. No arbitrary URL fetching or private repository access.",
+      "input_schema": {
+        "properties": {
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "identifier": {
+            "title": "Identifier",
+            "type": "string"
+          },
+          "limit": {
+            "default": 10,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source",
+          "identifier"
+        ],
+        "title": "read_threadArguments",
+        "type": "object"
+      }
+    }
+  ]
+}

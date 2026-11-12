@@ -1,0 +1,53 @@
+module: shinbot
+display_name: ShinBot docs
+repo: https://github.com/adarshdigievo/shinbot
+site_url: https://adarshdigievo.github.io/shinbot/docs/
+homepage: user_guide
+user_guide: user_guide
+reference: false
+package_info_page: false
+skill:
+  enabled: false
+cli:
+  enabled: false
+mcp:
+  enabled: false
+changelog:
+  enabled: false
+hero: false
+github_style: icon
+logo:
+  light: assets/shinbot-icon.png
+  dark: assets/shinbot-icon.png
+  show_title: true
+favicon: assets/favicon.png
+accent_color:
+  light: '#0866d9'
+  dark: '#83b4ff'
+navbar_color:
+  light: '#f0f3f8'
+  dark: '#0d141e'
+site:
+  css: assets/docs.css
+  toc: true
+  toc-depth: 3
+  link-external-newwindow: true
+sections:
+  - title: Developer guide
+    dir: developers
+  - title: Reference
+    dir: reference
+navbar_order:
+  - User Guide
+  - Developer guide
+  - Reference
+source:
+  branch: main
+  path: src/shinbot
+show_dates: false
+show_author: false
+show_security: false
+seo:
+  canonical:
+    base_url: https://adarshdigievo.github.io/shinbot/docs/
+  title_template: '{page_title}'
