@@ -1,6 +1,7 @@
 """Exercise successful updates, failed migrations, interrupted updates and rollback in Docker."""
 
 import copy
+import fcntl
 import json
 import os
 import sqlite3
@@ -121,8 +122,23 @@ def main():
         eventually(started, "persisted update checkpoint", timeout=90)
         process.kill()
         process.wait(timeout=10)
+        # Docker inherits the maintenance lock and can outlive the killed launcher.
+        # Wait for that child to finish before checking the interrupted-update guard.
+        with (HOME / "maintenance.lock").open("a") as lock:
+
+            def idle():
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    return False
+                fcntl.flock(lock, fcntl.LOCK_UN)
+                return True
+
+            eventually(idle, "updater's Docker child to release the maintenance lock", timeout=90)
         blocked = command("start", "--no-open-browser", env=env, succeeds=False)
-        assert blocked.returncode != 0 and "interrupted" in blocked.stderr
+        assert blocked.returncode != 0 and "interrupted" in blocked.stderr, (
+            blocked.returncode, blocked.stdout, blocked.stderr
+        )
         command("rollback", "--timeout", "45", env=env)
         c = connect()
         assert checked(c.get("/api/status"))["restore_hold"]

@@ -203,18 +203,21 @@ def test_compose_snapshot_preserves_literal_dollars(tmp_path):
 def test_docker_child_keeps_maintenance_lock_if_launcher_exits(installation):
     import sys
 
+    maintenance.write_json(cli.home() / "recovery.json", {"pending": True})
     with maintenance.locked():
         child = subprocess.Popen(
-            [sys.executable, "-c", "import time; time.sleep(0.3)"], **maintenance.child_lock()
+            [sys.executable, "-c", "import sys; sys.stdin.read()"],
+            stdin=subprocess.PIPE,
+            **maintenance.child_lock(),
         )
     try:
         with pytest.raises(cli.typer.BadParameter, match="Another installation"):
-            with maintenance.locked():
-                pass
+            cli.start(open_browser=False)
     finally:
-        child.wait(timeout=5)
-    with maintenance.locked():
-        pass
+        child.communicate(timeout=5)
+    with pytest.raises(cli.typer.BadParameter, match="interrupted"):
+        cli.start(open_browser=False)
+    assert installation[0] == []
 
 
 def test_update_checkpoint_write_failure_restarts_original_containers(installation, monkeypatch):
