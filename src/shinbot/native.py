@@ -344,7 +344,7 @@ def desktop_enable(
     runtime = runtime.expanduser().resolve()
     if not runtime.is_file() or not os.access(runtime, os.X_OK):
         raise typer.BadParameter("Choose the installed Apple container executable.")
-    image = image or f"adarshidigievo/shinbot:{__version__}-desktop"
+    image = image or f"adarshd96/shinbot:{__version__}-desktop"
     subprocess.run([str(runtime), "system", "status"], check=True, capture_output=True)
     subprocess.run([str(runtime), "image", "inspect", image], check=True, capture_output=True)
     idle_for_backend_change(root, config)

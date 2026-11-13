@@ -1,7 +1,7 @@
 name: shinbot
 services:
   control:
-    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a2-control
+    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-control
     init: true
     restart: unless-stopped
     ports: ["${SHINBOT_BIND:-127.0.0.1}:${SHINBOT_PORT:-8765}:8765"]
@@ -21,7 +21,7 @@ services:
     cap_drop: [ALL]
     networks: [runtime-net, computer-net, browser-net, channel-net]
   runtime:
-    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a2-runtime
+    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-runtime
     init: true
     restart: unless-stopped
     environment:
@@ -33,7 +33,7 @@ services:
     networks: [runtime-net]
     extra_hosts: ["host.docker.internal:host-gateway"]
   computer:
-    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a2-computer
+    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-computer
     init: true
     restart: unless-stopped
     environment:
@@ -46,7 +46,7 @@ services:
     mem_limit: 2g
     networks: [computer-net]
   browser:
-    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a2-browser
+    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-browser
     init: true
     restart: unless-stopped
     environment:
@@ -59,7 +59,7 @@ services:
     networks: [browser-net]
   telegram:
     profiles: [telegram]
-    image: ${SHINBOT_IMAGE:-adarshidigievo/shinbot}:0.1.0a2-telegram
+    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-telegram
     init: true
     restart: unless-stopped
     environment:

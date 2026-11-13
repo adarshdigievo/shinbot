@@ -37,7 +37,7 @@ python -m pip install --pre shinbot
 shinbot start
 ```
 
-The first start pulls the versioned service images from `adarshidigievo/shinbot`. Published images support `linux/amd64` and `linux/arm64`. The launcher generates private service credentials and opens `http://localhost:8765` with a setup link.
+The first start pulls the versioned service images from `adarshd96/shinbot`. Published images support `linux/amd64` and `linux/arm64`. The launcher generates private service credentials and opens `http://localhost:8765` with a setup link.
 
 ## Build from source
 

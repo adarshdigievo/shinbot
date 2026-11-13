@@ -2,10 +2,16 @@ name: Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      skip_checks:
+        description: Retry publishing an existing release tag whose CI has already passed
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: release-${{ github.event.release.tag_name }}
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 jobs:
   validate:
@@ -19,7 +25,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.ref }}
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: '0.11.2'
@@ -27,21 +33,28 @@ jobs:
       - name: Validate release identity
         id: version
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          PRERELEASE: ${{ github.event.release.prerelease }}
-        run: uv run --no-project python scripts/release.py check --tag "$RELEASE_TAG" --prerelease "$PRERELEASE" >> "$GITHUB_OUTPUT"
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          PRERELEASE=$(gh release view "$RELEASE_TAG" --json isDraft,isPrerelease --jq 'select(.isDraft == false) | .isPrerelease')
+          uv run --no-project python scripts/release.py check --tag "$RELEASE_TAG" --prerelease "$PRERELEASE" >> "$GITHUB_OUTPUT"
       - name: Check locked Python dependencies for published advisories
         run: uv run --no-project python scripts/audit_dependencies.py /tmp/shinbot-release-dependencies.json --fail-vulnerable
   checks:
     needs: validate
+    if: github.event_name != 'workflow_dispatch' || !inputs.skip_checks
     uses: ./.github/workflows/ci.yml
   site:
     needs: validate
     uses: ./.github/workflows/site-build.yml
     with:
-      ref: ${{ github.event.release.tag_name }}
+      ref: ${{ github.ref }}
   distributions:
-    needs: [checks, site]
+    needs: [validate, checks, site]
+    if: >-
+      ${{ !cancelled() && needs.validate.result == 'success' && needs.site.result == 'success' &&
+      (needs.checks.result == 'success' || (needs.checks.result == 'skipped' && inputs.skip_checks)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -61,6 +74,9 @@ jobs:
           if-no-files-found: error
   images:
     needs: [validate, checks, site]
+    if: >-
+      ${{ !cancelled() && needs.validate.result == 'success' && needs.site.result == 'success' &&
+      (needs.checks.result == 'success' || (needs.checks.result == 'skipped' && inputs.skip_checks)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: dockerhub
@@ -85,9 +101,9 @@ jobs:
           target: ${{ matrix.service }}
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: adarshidigievo/shinbot:${{ needs.validate.outputs.version }}-${{ matrix.service }}
-          cache-from: type=registry,ref=adarshidigievo/shinbot:buildcache-${{ matrix.service }}
-          cache-to: type=registry,ref=adarshidigievo/shinbot:buildcache-${{ matrix.service }},mode=max
+          tags: adarshd96/shinbot:${{ needs.validate.outputs.version }}-${{ matrix.service }}
+          cache-from: type=registry,ref=adarshd96/shinbot:buildcache-${{ matrix.service }}
+          cache-to: type=registry,ref=adarshd96/shinbot:buildcache-${{ matrix.service }},mode=max
           provenance: mode=max
           sbom: true
   pypi:
@@ -143,7 +159,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
           VERSION: ${{ needs.validate.outputs.version }}
         run: |
           if [ "$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)" != "$RELEASE_TAG" ]; then
@@ -152,6 +168,6 @@ jobs:
           fi
           for service in control runtime computer browser desktop telegram; do
             docker buildx imagetools create \
-              --tag "adarshidigievo/shinbot:latest-$service" \
-              "adarshidigievo/shinbot:$VERSION-$service"
+              --tag "adarshd96/shinbot:latest-$service" \
+              "adarshd96/shinbot:$VERSION-$service"
           done
