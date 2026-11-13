@@ -40,7 +40,7 @@ jobs:
       - name: Sync overviews and requested cache maintenance
         env:
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_METADATA_TOKEN }}
           MIGRATE_CACHES: ${{ inputs.migrate_caches }}
           DELETE_OLD_CACHE_TAGS: ${{ inputs.delete_old_cache_tags }}
         run: |

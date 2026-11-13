@@ -30,12 +30,13 @@ Create the matching `pypi` environment in GitHub. Restrict deployment to release
 
 ### Docker Hub
 
-Create the public repository `adarshd96/shinbot`. Create a Docker Hub personal access token with **Read & Write** access, without Delete access. Add these values to the GitHub `dockerhub` environment:
+Create the public repository `adarshd96/shinbot`. Use separate Docker Hub personal access tokens for image publishing and repository metadata. Docker Hub requires **Read, Write & Delete** permission for overview updates. Add these values to the GitHub `dockerhub` environment:
 
 | Type | Name | Value |
 | --- | --- | --- |
 | Actions variable | `DOCKERHUB_USERNAME` | `adarshd96` |
-| Actions secret | `DOCKERHUB_TOKEN` | The Docker Hub access token |
+| Actions secret | `DOCKERHUB_TOKEN` | Read & Write token for image publishing |
+| Actions secret | `DOCKERHUB_METADATA_TOKEN` | Read, Write & Delete token for overviews and cache maintenance |
 
 Restrict the `dockerhub` environment to `v*` tags. Store the token only in that environment, not as a repository-wide secret. Rotate it through the environment's secrets; do not place it in workflow files or release notes.
 
@@ -86,7 +87,7 @@ BuildKit stores reusable layers in `adarshd96/shinbot-buildcache:<service>`. Kee
 
 After successful image and PyPI publishing, the release workflow syncs the main Docker Hub overview from `deploy/DOCKERHUB.md`, along with descriptions for both repositories. Edit that file to update the public installation instructions and image guide for future releases.
 
-The **Docker Hub metadata** workflow can also run on a tag permitted by the `dockerhub` environment, without building images, running CI, or publishing a package. Its optional cache migration copies the six legacy `buildcache-*` tags to the cache repository and compares the manifests. Cleanup is a separate option and removes source tags only after all copies pass verification. The Docker token needs Delete permission only for this one-time cleanup; routine publishing and overview updates use Read & Write.
+The **Docker Hub metadata** workflow can also run on a tag permitted by the `dockerhub` environment, without building images, running CI, or publishing a package. Its optional cache migration copies the six legacy `buildcache-*` tags to the cache repository and compares the manifests. Cleanup is a separate option and removes source tags only after all copies pass verification. Only the metadata step receives `DOCKERHUB_METADATA_TOKEN`; image builds and cache copies use the separate Read & Write token.
 
 After PyPI publishing, a serialized promotion job checks the current latest release before updating `latest-control`, `latest-runtime`, `latest-computer`, `latest-browser`, `latest-desktop` and `latest-telegram`. Prereleases keep versioned tags. The launcher uses the exact image set bundled with its package, never the mutable `latest-*` aliases.
 
