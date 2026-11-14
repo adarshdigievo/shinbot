@@ -16,7 +16,7 @@ jobs:
   checks:
     name: Python and runtime (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +39,7 @@ jobs:
       - run: uv run --frozen ruff check src tests scripts
       - run: uv run --frozen python scripts/release.py check
       - run: npm --prefix computer ci --ignore-scripts
-      - run: uv run --frozen --extra computer --extra security --extra telegram pytest --durations=10
+      - run: uv run --frozen --extra computer --extra security --extra telegram pytest -n auto --durations=10
       - run: npm --prefix runtime ci --ignore-scripts
       - name: Check locked Node dependencies for advisories
         if: runner.os == 'Linux'
@@ -67,7 +67,7 @@ jobs:
   browser:
     name: Web UI journeys
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -108,10 +108,23 @@ jobs:
         with:
           args: -color
   docker:
-    name: Container integration
+    name: Container integration (${{ matrix.name }})
     if: github.event_name != 'workflow_dispatch' || inputs.docker_tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each group gets its own deployment, so the long journeys no longer queue behind each other.
+        include:
+          - name: recovery
+            journeys: recovery
+          - name: maintenance
+            journeys: maintenance
+          - name: data
+            journeys: projects extended restore
+          - name: app
+            journeys: updates integration profiles learning reinstall ui browser_preview
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -124,7 +137,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22.23.1'
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - run: uv sync --frozen --extra computer --extra security --extra telegram
       - run: npm --prefix runtime ci --ignore-scripts
       - run: node scripts/copy_web_assets.mjs
@@ -133,8 +145,13 @@ jobs:
         shell: bash
         run: |
           version=$(uv run --frozen python -c 'from shinbot import __version__; print(__version__)')
+          # Docker's own builder writes straight into the image store and builds the
+          # targets together, sharing their common stages.
           for service in control runtime computer browser telegram; do
-            docker buildx build --load --file deploy/Dockerfile --target "$service" \
-              --tag "shinbot-dev/shinbot:$version-$service" .
+            docker build --file deploy/Dockerfile --target "$service" \
+              --tag "shinbot-dev/shinbot:$version-$service" . > "$RUNNER_TEMP/build-$service.log" 2>&1 &
           done
-      - run: uv run --frozen python tests/run_e2e.py
+          failed=0
+          for job in $(jobs -p); do wait "$job" || failed=1; done
+          if [ "$failed" != 0 ]; then tail -n 80 "$RUNNER_TEMP"/build-*.log; exit 1; fi
+      - run: uv run --frozen python tests/run_e2e.py --only ${{ matrix.journeys }}

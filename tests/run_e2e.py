@@ -32,7 +32,6 @@ JOURNEYS = (
     "reinstall",
     "ui",
     "browser_preview",
-    "onboarding",
 )
 
 
