@@ -3,11 +3,11 @@
   const key = 'shinbot.appearance';
   const themes = {
     system: {name:'System', description:'Follow your device', mode:null, chrome:null},
-    light: {name:'Light', description:'Clean whites and blue accents', mode:'light', chrome:'#f0f3f8'},
-    dark: {name:'GitHub Dark', description:'Neutral charcoal and clear blues', mode:'dark', chrome:'#010409'},
+    light: {name:'Light', description:'Clean whites and navy ink', mode:'light', chrome:'#eff1f5'},
+    dark: {name:'GitHub Dark', description:'Neutral charcoal and clear blues', mode:'dark', chrome:'#0b0e13'},
     nord: {name:'Nord', description:'Cool slate and muted frost', mode:'dark', chrome:'#2e3440'},
     mocha: {name:'Catppuccin Mocha', description:'Soft pastels on deep purple', mode:'dark', chrome:'#181825'},
-    latte: {name:'Catppuccin Latte', description:'Warm light with violet accents', mode:'light', chrome:'#e6e9ef'},
+    latte: {name:'Catppuccin Latte', description:'Warm light with violet accents', mode:'light', chrome:'#e9ecf2'},
   };
   const valid = value => Object.hasOwn(themes, value) ? value : 'system';
   const system = matchMedia('(prefers-color-scheme: dark)');

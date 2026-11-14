@@ -98,7 +98,8 @@ def main():
                 def contained():
                     measured = bounds()
                     assert measured["document"] <= measured["height"] + 1, measured
-                    assert measured["y"] == 0 and measured["header"] == 0, measured
+                    # The main sheet is inset from the window edge, so the pinned header starts a few pixels down.
+                    assert measured["y"] == 0 and 0 <= measured["header"] <= 12, measured
                     assert abs(measured["layout"] - measured["height"]) <= 1, measured
                     assert measured["composer"] <= measured["height"] + 1, measured
                     assert measured["paneScroll"] > measured["paneHeight"], measured
