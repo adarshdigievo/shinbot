@@ -108,9 +108,11 @@ let sidebarCollapsed=false;try{sidebarCollapsed=localStorage.getItem(sidebarKey)
 function setSidebarCollapsed(collapsed){
   sidebarCollapsed=collapsed;try{localStorage.setItem(sidebarKey,String(collapsed));}catch{}
   $('.layout')?.classList.toggle('sidebar-collapsed',collapsed);
-  $('.mobile-menu')?.setAttribute('aria-expanded',String(!collapsed));
+  syncMenuState();
   (collapsed?$('.mobile-menu'):$('#close-navigation'))?.focus();
 }
+// One button serves both layouts: it reports the sidebar on desktop and the drawer on phones.
+function syncMenuState(){$('.mobile-menu')?.setAttribute('aria-expanded',String(desktopShell.matches?!sidebarCollapsed:!!$('.sidebar.open')));}
 function setNavigation(open){
   $('.layout')?.classList.toggle('navigation-open',open);
   $('.sidebar')?.classList.toggle('open',open);
@@ -133,7 +135,7 @@ const inspectorUI=chatInspector({escape,icon,date,computer:computerUI,openCard:c
 function inspectorToggle(){return `<button type="button" class="quiet icon-button" data-toggle-inspector aria-label="Chat details" aria-controls="chat-inspector" aria-expanded="false" title="Show chat details">${icon('panel-right')}</button>`;}
 function chatLayout(content){return `<div class="chat-workspace"><div class="chat-main">${content}</div>${inspectorUI.markup()}</div>`;}
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k') {event.preventDefault();openSearch();}if(event.key==='Escape'&&!document.querySelector('dialog[open]')){if($('#conversation-menu')?.open){event.preventDefault();closeConversationMenu(true);}else if($('.sidebar.open'))setNavigation(false);}});
-matchMedia('(min-width: 761px)').addEventListener('change',event=>{if(event.matches&&$('.sidebar.open'))setNavigation(false);});
+desktopShell.addEventListener('change',event=>{if(event.matches&&$('.sidebar.open'))setNavigation(false);syncMenuState();});
 
 async function boot() {
   notificationUI.stop();computerUI.stop();extensionsUI.stop();clearInterval(state.pluginInterval);
@@ -150,7 +152,7 @@ async function boot() {
   $('#active-bot').value=state.bot;$('#active-bot').onchange=()=>{rememberDraft();state.bot=$('#active-bot').value;state.task=null;renderTaskList();navigate(state.view);};
   document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>navigate(button.dataset.view));
   $('.mobile-menu').onclick=()=>desktopShell.matches?setSidebarCollapsed(false):setNavigation(true);$('#close-navigation').onclick=()=>desktopShell.matches?setSidebarCollapsed(true):setNavigation(false);$('.navigation-backdrop').onclick=()=>setNavigation(false);
-  $('.layout').classList.toggle('sidebar-collapsed',sidebarCollapsed);$('.mobile-menu').setAttribute('aria-expanded',String(desktopShell.matches&&!sidebarCollapsed));
+  $('.layout').classList.toggle('sidebar-collapsed',sidebarCollapsed);syncMenuState();
   // The chat title shares the top row with these actions, so it needs their width.
   state.topActions?.disconnect();state.topActions=new ResizeObserver(([entry])=>$('.main')?.style.setProperty('--top-actions-width',Math.ceil(entry.borderBoxSize[0].inlineSize)+'px'));state.topActions.observe($('.top-actions'));
   $('#navigation-panel').onkeydown=event=>{if(event.key!=='Tab'||!$('.sidebar.open'))return;const items=[...$('#navigation-panel').querySelectorAll('button,a,input,select')].filter(el=>el.offsetParent!==null&&!el.closest('.sr-only'));const first=items[0],last=items.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}};

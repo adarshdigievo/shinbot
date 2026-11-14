@@ -185,7 +185,7 @@ details>p{font-size:var(--text-ui);line-height:1.6}
 
 /* Shell. The sidebar is the desk; the main area is a sheet resting on it. */
 .layout{display:grid;grid-template-columns:var(--sidebar-width) minmax(0,1fr);height:100dvh;overflow:hidden;background:var(--sidebar);transition:grid-template-columns .28s var(--ease-out)}
-.sidebar{background:var(--sidebar);display:flex;flex-direction:column;width:var(--sidebar-width);min-height:0;padding:12px 0 0;z-index:20;transition:opacity .2s,visibility .28s}
+.sidebar{background:var(--sidebar);display:flex;flex-direction:column;width:var(--sidebar-width);min-height:0;padding:12px 0 0;z-index:20;transition:opacity .2s}
 .sidebar>*:not(.sidebar-scroll):not(.sidebar-footer):not(.computer-dock){margin-left:12px;margin-right:12px}
 .sidebar-brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:0 0 0 6px;min-height:34px}
 .brand{display:flex;align-items:center;gap:10px;font-size:17px;letter-spacing:-.035em;font-weight:700;text-decoration:none;color:var(--ink);border-radius:var(--r-md)}
@@ -279,7 +279,8 @@ details>p{font-size:var(--text-ui);line-height:1.6}
 @keyframes live{50%{opacity:.35}}
 @media(min-width:761px){
   .layout.sidebar-collapsed{grid-template-columns:0 minmax(0,1fr)}
-  .sidebar-collapsed .sidebar{opacity:0;visibility:hidden}
+  /* Hide after the fade; show at once, so focus can move into the sidebar as it opens. */
+  .sidebar-collapsed .sidebar{opacity:0;visibility:hidden;transition:opacity .2s,visibility 0s .2s}
   .sidebar-collapsed .main{margin-left:var(--sheet-gap)}
   .sidebar-collapsed .mobile-menu{display:inline-flex;margin-left:-12px}
   /* A conversation's title bar and the app's actions share one row. */
