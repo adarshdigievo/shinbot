@@ -16,7 +16,7 @@ The bundled standard-license fingerprints record their SPDX source revision in `
 
 New plugin manifests accept the supported permissive identifiers described in the [plugin guide](../developers/03-plugins.qmd). Additional plugin dependencies require a host review before they can enter a runner image.
 
-The landing page uses the unmodified Figtree font under the SIL Open Font License 1.1. Its copyright notice and license ship alongside the font in `site/assets/fonts/OFL.txt`.
+The landing page and the web app use the unmodified Figtree font under the SIL Open Font License 1.1. Its copyright notice and license ship alongside the font in `site/assets/fonts/OFL.txt` and `src/shinbot/web/fonts/OFL.txt`.
 
 ## Browser backends
 
