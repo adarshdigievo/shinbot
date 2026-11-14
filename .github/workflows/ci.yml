@@ -115,16 +115,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Each group gets its own deployment, so the long journeys no longer queue behind each other.
+        # Each group gets its own deployment, so the long journeys no longer queue behind each
+        # other. Journeys keep their original relative order within a group; `browser` marks the
+        # groups whose journeys drive a browser on the runner.
         include:
-          - name: recovery
-            journeys: recovery
+          - name: recovery 1
+            journeys: recovery:first
+          - name: recovery 2
+            journeys: recovery:second
           - name: maintenance
-            journeys: maintenance
+            journeys: extended maintenance
           - name: data
-            journeys: projects extended restore
+            journeys: projects restore learning
+            browser: true
           - name: app
-            journeys: updates integration profiles learning reinstall ui browser_preview
+            journeys: updates integration profiles reinstall ui browser_preview
+            browser: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -140,18 +146,21 @@ jobs:
       - run: uv sync --frozen --extra computer --extra security --extra telegram
       - run: npm --prefix runtime ci --ignore-scripts
       - run: node scripts/copy_web_assets.mjs
-      - run: uv run --frozen playwright install --with-deps chromium
+      - if: matrix.browser
+        run: uv run --frozen playwright install --with-deps chromium
       - name: Build all service images
         shell: bash
         run: |
           version=$(uv run --frozen python -c 'from shinbot import __version__; print(__version__)')
           # Docker's own builder writes straight into the image store and builds the
           # targets together, sharing their common stages.
+          builds=()
           for service in control runtime computer browser telegram; do
             docker build --file deploy/Dockerfile --target "$service" \
               --tag "shinbot-dev/shinbot:$version-$service" . > "$RUNNER_TEMP/build-$service.log" 2>&1 &
+            builds+=("$!")
           done
           failed=0
-          for job in $(jobs -p); do wait "$job" || failed=1; done
+          for build in "${builds[@]}"; do wait "$build" || failed=1; done
           if [ "$failed" != 0 ]; then tail -n 80 "$RUNNER_TEMP"/build-*.log; exit 1; fi
       - run: uv run --frozen python tests/run_e2e.py --only ${{ matrix.journeys }}

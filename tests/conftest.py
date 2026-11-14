@@ -1,3 +1,4 @@
+import fcntl
 import hashlib
 import json
 import os
@@ -19,7 +20,8 @@ def scan_each_artifact_once(tmp_path_factory):
     test after test. Verdicts depend only on the scanner version, the policy and
     the artifact's bytes, so they are kept in a directory shared by all workers.
     Scanner errors are never kept, and a test that changes the scan timeout
-    always reaches the real scanner.
+    always reaches the real scanner. A per-artifact lock makes workers that
+    miss at the same moment wait for one scan instead of each starting their own.
     """
     base = tmp_path_factory.getbasetemp()
     cache = (base.parent if os.environ.get("PYTEST_XDIST_WORKER") else base) / "scan-verdicts"
@@ -33,12 +35,16 @@ def scan_each_artifact_once(tmp_path_factory):
         path = cache / (hashlib.sha256(key.encode()).hexdigest() + ".json")
         if path.exists():
             return json.loads(path.read_text())
-        result = run(self, files)
-        if result["status"] in {"passed", "blocked"}:
-            partial = path.with_suffix(f".{os.getpid()}.tmp")
-            partial.write_text(json.dumps(result))
-            partial.replace(path)
-        return result
+        with path.with_suffix(".lock").open("w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if path.exists():
+                return json.loads(path.read_text())
+            result = run(self, files)
+            if result["status"] in {"passed", "blocked"}:
+                partial = path.with_suffix(f".{os.getpid()}.tmp")
+                partial.write_text(json.dumps(result))
+                partial.replace(path)
+            return result
 
     security.Security._run = cached
     yield
