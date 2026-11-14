@@ -50,6 +50,7 @@ dev = [
     "pytest-asyncio==1.4.0",
     "ruff>=0.14,<1",
     "playwright>=1.55,<2",
+    "pytest-xdist==3.8.0",
 ]
 docs = [
     "great-docs==0.17.0",
