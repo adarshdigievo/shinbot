@@ -59,7 +59,9 @@ code { font-family: var(--mono); font-size: .88em; }
 .site-header nav a { display: inline-flex; align-items: center; gap: 5px; padding: 9px 14px; border-radius: 999px; color: var(--on-navy-muted); text-decoration: none; transition: background-color .15s, color .15s; }
 .site-header nav a:hover { background: #ffffff14; color: #fff; }
 .site-header nav img { filter: brightness(0) invert(1); opacity: .8; }
-.site-header :focus-visible, .stage :focus-visible, .install-panel :focus-visible { outline-color: #fff; }
+/* White rings only where the control sits on navy. The window straddles navy and white, so it gets both. */
+.site-header :focus-visible, .hero :focus-visible, .preview-toolbar :focus-visible, .install-panel :focus-visible { outline-color: #fff; }
+.app-preview:focus-visible { outline: 3px solid #fff; outline-offset: 0; box-shadow: 0 0 0 6px var(--blue); }
 
 /* Stage: headline, then the app itself with the mascot sitting on its window. */
 /* flow-root keeps the product's negative margin inside the stage, so the window hangs over its edge. */
