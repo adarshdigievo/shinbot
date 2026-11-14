@@ -14,7 +14,7 @@
   --scrim:#0f1a2e52; --toast:#15233f; --toast-ink:#fff; --brand-plate:#fff;
   --shadow-ink:#10213b24; --field-shadow:#17243a05; --composer-shadow:#152b4c14;
   --radius:8px;
-  font-family:"Figtree",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.5;font-synthesis:none;
+  font-family:"Figtree",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.5;font-synthesis:style;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -289,7 +289,9 @@ details>p{font-size:var(--text-ui);line-height:1.6}
   .sidebar-collapsed .main{margin-left:var(--sheet-gap)}
   .sidebar-collapsed .notifications-panel{max-width:calc(100vw - 40px)}
   .sidebar-collapsed .mobile-menu{display:inline-flex;margin-left:-12px}
-  /* A conversation's title bar and the app's actions share one row. */
+}
+/* A conversation's title bar and the app's actions share one row where there is room for both. */
+@media(min-width:1001px){
   .main:has(>.chat-page) .topbar{position:absolute;inset:0 0 auto;z-index:6;pointer-events:none}
   .main:has(>.chat-page) .topbar>*{pointer-events:auto}
   .main:has(>.chat-page) .trail{display:none}
@@ -1186,7 +1188,7 @@ button.subscription-provider:focus-visible{outline-offset:-3px;position:relative
 
 /* The top row. Wide screens put a conversation's title beside the app actions;
    other pages show their name there once the page heading has scrolled away. */
-@media(min-width:761px){
+@media(min-width:1001px){
   .chat-heading,.chat-start-toolbar{padding-right:max(12px,calc(var(--top-actions-width,190px) + 22px - var(--inspector-width,0px)))}
   .sidebar-collapsed .chat-heading{padding-left:56px}
 }
