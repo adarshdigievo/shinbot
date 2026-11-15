@@ -94,3 +94,34 @@ test('the released OpenAI adapter needs a stream deadline after HTTP headers arr
     controller.abort();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
   }
 });
+
+test('a request the provider rejected is settled, while outages and rate limits stay retryable',async()=>{
+  const {settledError}=await import('../dist/model-connection.js');
+  const error=errorMessage=>({...message(),stopReason:'error',errorMessage});
+  for(const text of [
+    '400: {"message":"max_tokens: 5000 > 4096, which is the maximum allowed"}',
+    '404 model gpt-4290 does not exist',
+    'OpenAI API error (422): request timeout must be below 600',
+    '401 Incorrect API key provided: sk-500abc',
+    '413 payload of 150000 bytes hit the server error threshold',
+  ]) {
+    assert.equal(isRetryableAssistantError(error(text)),true,text);
+    const settled=settledError(error(text));
+    assert.equal(isRetryableAssistantError(settled),false,text);
+    assert.equal(settled.errorMessage.slice(0,40).includes(/4\d\d/.exec(text)[0]),true);
+  }
+  for(const text of ['429 rate limit exceeded','408 request timeout','409 conflict, try your request again','499 client closed request, timeout',
+    '500: upstream exploded','503 overloaded','Connection timeout while waiting for model progress.','fetch failed']) {
+    assert.equal(settledError(error(text)).errorMessage,text);
+    assert.equal(isRetryableAssistantError(settledError(error(text))),true,text);
+  }
+  // Applied to the terminal event of a wrapped provider, and nowhere else.
+  const source=createAssistantMessageEventStream();
+  const provider=withConnectionDeadline({streamSimple:()=>source},1000);
+  const stream=provider.streamSimple(model,{});
+  const failed=error('400 max_tokens: 5000 > 4096');
+  source.push({type:'error',reason:'error',error:failed});
+  const result=await stream.result();
+  assert.equal(result.errorMessage,'400 max_tokens: # > #');
+  assert.equal(isRetryableAssistantError(result),false);
+});

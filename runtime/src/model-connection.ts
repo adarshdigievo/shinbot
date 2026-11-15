@@ -1,7 +1,21 @@
 import {
-  createAssistantMessageEventStream, type AssistantMessage, type AssistantMessageEventStream,
+  createAssistantMessageEventStream, isRetryableAssistantError, type AssistantMessage, type AssistantMessageEventStream,
   type Model, type Api, type Provider, type StreamOptions,
 } from '@earendil-works/pi-ai';
+import { modelIdleMs } from './recovery.js';
+
+// Pi retries any error whose text contains 429, 500 or "timeout", which also matches request errors such
+// as "400 max_tokens: 5000 > 4096". A leading client-error status is the provider's verdict on this
+// request, so reword it until the retry policy lets it settle.
+export function settledError(message: AssistantMessage): AssistantMessage {
+  const status = /^(?:[\w .-]{0,60}\()?(4\d\d)(?=[\s:)])/.exec(message.errorMessage || '')?.[1];
+  if (!status || !/^4(0[0-6]|1[01345]|22|31)$/.test(status) || !isRetryableAssistantError(message)) return message;
+  for (const errorMessage of [message.errorMessage!.replace(/\d{3,}/g, digits => digits === status ? digits : '#'),
+      `${status}: The provider rejected this request.`]) {
+    if (!isRetryableAssistantError({...message, errorMessage})) return {...message, errorMessage};
+  }
+  return message;
+}
 
 // Provider SDK request deadlines do not always cover a stalled response body.
 // Use Pi's public provider/stream API to turn idleness into a retryable error.
@@ -40,7 +54,7 @@ function connectedStream(
           touch();
           if('partial' in event) partial=event.partial;
           if(event.type==='done'||event.type==='error') {settled=true;clean();}
-          output.push(event);
+          output.push(event.type==='error'&&event.reason==='error' ? {...event,error:settledError(event.error)} : event);
         }
         if(!settled) fail('error','Connection closed before the model response completed.');
       } catch(error) {
@@ -57,7 +71,7 @@ function progress<T extends StreamOptions>(options:T|undefined, signal:AbortSign
   }});
 }
 
-export function withConnectionDeadline(provider:Provider, timeout=60000):Provider {
+export function withConnectionDeadline(provider:Provider, timeout=modelIdleMs):Provider {
   return {
     ...provider,
     stream:(model,context,options)=>connectedStream(model,

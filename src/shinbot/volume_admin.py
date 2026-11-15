@@ -11,6 +11,26 @@ import uuid
 from pathlib import Path, PurePosixPath
 
 VOLUMES = {"control-data", "runtime-data", "computer-data", "browser-data", "workspace"}
+# Bounds the memory spent listing an archive from elsewhere; this installation's own archives are exempt.
+ENTRY_LIMIT = 500000
+
+
+def entry_limit():
+    # The launcher sets this for archives this installation wrote itself.
+    return None if os.getenv("SHINBOT_BACKUP_TRUSTED") == "1" else ENTRY_LIMIT
+
+
+class Archive(tarfile.TarFile):
+    """Leave out pipes, sockets and devices: they hold no data and cannot be restored."""
+
+    skipped = ()
+
+    def gettarinfo(self, name=None, arcname=None, fileobj=None):
+        member = super().gettarinfo(name, arcname, fileobj)
+        if member is None or not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
+            self.skipped = [*self.skipped, str(arcname or name)]
+            return None
+        return member
 
 
 def service_filter(member, destination):
@@ -23,10 +43,13 @@ def service_filter(member, destination):
     )
 
 
-def validate_archive(archive):
+def validate_archive(archive, limit=ENTRY_LIMIT):
     members = archive.getmembers()
-    if len(members) > 500000:
-        raise ValueError("Backup contains too many entries.")
+    if limit is not None and len(members) > limit:
+        raise ValueError(
+            f"Backup contains {len(members)} entries; an archive from elsewhere may hold {limit}. "
+            "If you made this backup yourself, repeat the restore with --trusted."
+        )
     names = set()
     links = set()
     for member in members:
@@ -47,7 +70,10 @@ def validate_archive(archive):
         if member.issym() or member.islnk():
             links.add(path)
         if member.uid not in {0, 1000, 1001} or member.gid not in {0, 1000, 1001}:
-            raise ValueError("Backup contains an unsupported service identity.")
+            raise ValueError(
+                f"{member.name} belongs to user {member.uid}, group {member.gid}; "
+                "ShinBot volumes only hold files owned by its services (0, 1000, 1001)."
+            )
     with tempfile.TemporaryDirectory() as empty:
         for member in members:
             path = PurePosixPath(member.name)
@@ -74,7 +100,7 @@ def backup(destination):
     temporary = target.with_suffix(target.suffix + ".partial")
     try:
         # Level 6 is under half the time of the default 9 for about the same size.
-        with tarfile.open(temporary, "w:gz", compresslevel=6) as archive:
+        with Archive.open(temporary, "w:gz", compresslevel=6) as archive:
             for name in sorted(VOLUMES):
 
                 def persistent(member):
@@ -89,8 +115,16 @@ def backup(destination):
                     return member
 
                 archive.add(Path("/volumes") / name, arcname=name, filter=persistent)
+            skipped = archive.skipped
         with tarfile.open(temporary, "r:gz") as archive:
-            validate_archive(archive)
+            validate_archive(archive, entry_limit())
+        if skipped:
+            print(
+                f"Left out {len(skipped)} pipes, sockets or devices, which hold no data: "
+                + ", ".join(skipped[:20])
+                + (" and more." if len(skipped) > 20 else "."),
+                flush=True,
+            )
         temporary.chmod(0o600)
         temporary.replace(target)
         os.chown(target, int(os.getenv("SHINBOT_BACKUP_UID", "0")), int(os.getenv("SHINBOT_BACKUP_GID", "0")))
@@ -100,7 +134,7 @@ def backup(destination):
 
 def restore(source):
     with tarfile.open(source, "r:gz") as archive:
-        validate_archive(archive)
+        validate_archive(archive, entry_limit())
         names = {PurePosixPath(m.name).parts[0] for m in archive.getmembers()}
         if names != VOLUMES:
             raise ValueError("Backup must contain all five data volumes.")
@@ -133,5 +167,9 @@ def restore(source):
 
 if __name__ == "__main__":
     os.umask(0o077)
-    {"backup": backup, "restore": restore}[sys.argv[1]](sys.argv[2])
+    try:
+        {"backup": backup, "restore": restore}[sys.argv[1]](sys.argv[2])
+    except (ValueError, tarfile.TarError) as error:
+        # The launcher only sees an exit status; say why here, without a traceback.
+        sys.exit(f"{sys.argv[1].capitalize()} stopped: {error}")
     print(f"{sys.argv[1].capitalize()} completed.")

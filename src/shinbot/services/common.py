@@ -20,6 +20,20 @@ def service_auth(request: Request):
         raise HTTPException(401, "Unauthorized")
 
 
+# A receipt is kept for good so a replay can never run an action twice; only old bulky output is dropped.
+RETAINED = 30 * 86400
+EXPIRED = {
+    "isError": True,
+    "content": [
+        {
+            "type": "text",
+            "text": "This action completed earlier and its saved output has expired. "
+            "Inspect the destination instead of repeating it.",
+        }
+    ],
+}
+
+
 class Journal:
     def __init__(self, directory: Path):
         self.recent_results = RecentResults()
@@ -35,6 +49,15 @@ class Journal:
             "CREATE TABLE IF NOT EXISTS effects(id TEXT PRIMARY KEY,hash TEXT,status TEXT,result TEXT,epoch TEXT,created REAL)"
         )
         self.db.execute("UPDATE effects SET status='uncertain' WHERE status='executing'")
+        self.trim()
+
+    def trim(self):
+        self.trimmed = time.time()
+        # Small results, such as attachment references, stay exact.
+        self.db.execute(
+            "UPDATE effects SET result=? WHERE status='completed' AND created<? AND length(result)>2000",
+            (packed(EXPIRED), self.trimmed - RETAINED),
+        )
 
     def lookup(self, payload):
         digest = hashlib.sha256(packed(payload).encode()).hexdigest()
@@ -68,6 +91,8 @@ class Journal:
         if prior is not None:
             return prior
         digest = hashlib.sha256(packed(payload).encode()).hexdigest()
+        if time.time() - self.trimmed > 86400:
+            self.trim()
         self.db.execute(
             "INSERT INTO effects VALUES (?,?,'executing',NULL,?,?)",
             (payload["id"], digest, payload["epoch"], time.time()),

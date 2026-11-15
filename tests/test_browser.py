@@ -108,7 +108,8 @@ async def test_unsafe_port_is_a_failed_navigation_with_a_replayable_result(brows
         "id": "unsafe-port",
         "task_id": "task",
         "epoch": "e",
-        "args": {"operation": "goto", "url": "http://127.0.0.1:9/"},
+        # A public address: loopback now waits for the owner before any navigation.
+        "args": {"operation": "goto", "url": "http://93.184.216.34:9/"},
     }
     result = await service.execute(payload)
     assert result["isError"] and "could not be reached" in result["content"][0]["text"]

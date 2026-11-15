@@ -8,6 +8,16 @@ import time
 from .db import packed, uid
 
 
+def outside_workspace(word):
+    # An option can carry a path after "=" or glued on, as in --files0-from=/proc/1/environ or -I/etc.
+    path = word.rsplit("=", 1)[-1] if word.startswith("-") else word
+    return (
+        ".." in path.split("/")
+        or (path.startswith("/") and not (path + "/").startswith("/workspace/"))
+        or (word.startswith("-") and "=" not in word and "/" in word)
+    )
+
+
 def guarded_action(tool, args):
     if tool == "desktop":
         return args.get("operation") not in {"observe", "screenshot"}
@@ -15,11 +25,14 @@ def guarded_action(tool, args):
         return True
     if tool == "run_command":
         command = args.get("command", "")
-        if any(character in command for character in "\n\r;&|><`$()"):
+        # The shell expands globs, and paths outside the workspace reach /proc and other services' files.
+        if any(character in command for character in "\n\r;&|><`$()*?[]{}~"):
             return True
         try:
             words = shlex.split(command)
         except ValueError:
+            return True
+        if any(outside_workspace(word) for word in words[1:]):
             return True
         # Everything beyond these read-only commands needs a separate decision in Auto.
         return not (
@@ -87,7 +100,7 @@ class Approvals:
         )
 
     def decide(self, action_id, approved, scope="once"):
-        if scope not in {"once", "chat", "always"} or (not approved and scope != "once"):
+        if scope not in ("once", "chat", "always") or (not approved and scope != "once"):
             raise ValueError("Choose Allow once, Allow for this chat, Always allow, or Decline.")
         with self.db.transaction() as db:
             action = db.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone()

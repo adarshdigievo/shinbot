@@ -54,6 +54,8 @@ def main():
             SHINBOT_BROWSER_DATA=str(root / "browser"),
             SHINBOT_BROWSER_VIEW="native",
             SHINBOT_HEADLESS="0",
+            # The agent navigation below targets the test origin on loopback, which Auto would ask about.
+            SHINBOT_BROWSER_TRUSTED_HOSTS="127.0.0.1",
         )
         log = (OUT / "browser.log").open("w")
         service = subprocess.Popen(

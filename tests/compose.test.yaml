@@ -7,3 +7,7 @@ services:
   runtime:
     environment:
       SHINBOT_FIXTURE_URL: http://fixture:8888/v1
+  browser:
+    environment:
+      # Auto mode only opens public addresses unprompted; the fixture site is a Compose service.
+      SHINBOT_BROWSER_TRUSTED_HOSTS: fixture:8888
