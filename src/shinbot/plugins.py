@@ -279,7 +279,8 @@ class Plugins:
                 },
             )
         # Telegram 1.x needed a separate host service that no longer exists.
-        self.db.execute("DELETE FROM plugins WHERE id='telegram' AND version LIKE '1.%'")
+        # They were never enabled, so no conversation refers to them.
+        self.db.execute("DELETE FROM plugins WHERE id='telegram' AND version LIKE '1.%' AND status='staged'")
 
     async def repository(self, source, ref="HEAD"):
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", source):

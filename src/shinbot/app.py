@@ -349,6 +349,10 @@ def create_app(config: Config | None = None):
                 await core.auth.failed(peer, 403, "Current password is incorrect. Your password was not changed.")
         encoded = await asyncio.to_thread(hash_password, change.new)
         with core.db.transaction() as db:
+            # Hashing runs off the event loop, so another device or a host reset may have won meanwhile.
+            current = db.execute("SELECT value FROM settings WHERE key='password'").fetchone()
+            if not current or json.loads(current["value"]) != saved:
+                raise Conflict("Your password was just changed somewhere else. Sign in again with the new one.")
             db.execute("UPDATE settings SET value=? WHERE key='password'", (packed(encoded),))
             # Everyone else signs in again; this device stays signed in.
             db.execute("DELETE FROM sessions WHERE hash<>?", (digest(token),))

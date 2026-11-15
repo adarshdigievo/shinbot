@@ -679,3 +679,24 @@ def test_host_reset_refuses_an_unclaimed_installation(client, application, monke
     )
     assert result.exit_code != 0 and "no owner yet" in result.output
     assert core.db.setting("password") is None
+
+
+def test_password_change_loses_to_a_change_made_while_it_was_hashing(owner, application, monkeypatch):
+    from shinbot import app as gateway
+
+    core = application.state.core
+    hash_password = gateway.hash_password
+
+    def racing(password):
+        # Another device finishes its own change while this one is still hashing.
+        core.db.set("password", hash_password("the-other-devices-password"))
+        return hash_password(password)
+
+    monkeypatch.setattr(gateway, "hash_password", racing)
+    sessions = core.db.one("SELECT count(*) AS n FROM sessions")["n"]
+    late = owner.post("/api/auth/password", json={"current": PASSWORD, "new": "a-brand-new-password"})
+    assert late.status_code == 409 and "changed somewhere else" in late.json()["detail"]
+    assert core.db.one("SELECT count(*) AS n FROM sessions")["n"] == sessions
+    owner.headers.pop("Authorization")
+    assert login(owner, "a-brand-new-password").status_code == 401
+    assert login(owner, "the-other-devices-password").status_code == 200

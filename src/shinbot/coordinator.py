@@ -173,6 +173,9 @@ class Coordinator:
                     if stuck:
                         error = "The runtime kept failing on this request. Send it again; if it repeats, check the runtime logs."
                     self.runtime_errors.pop(row["id"], None)
+                    if stuck and row["submission_id"] is not None:
+                        # The runtime accepted this work and may still be running it: stop it too.
+                        db.execute("INSERT OR IGNORE INTO pending_aborts VALUES (?)", (row["task_id"],))
                     db.execute(
                         "UPDATE messages SET status='failed',error=?,finished=? WHERE id=? AND status NOT IN ('cancelled','completed')",
                         (str(error)[:1000], time.time(), row["id"]),
@@ -348,10 +351,14 @@ class Coordinator:
                             else self.core.telegram.owner()
                         )
                         if send and recipient:
+                            # Files made since the previous reply ended: a follow-up queued during
+                            # that reply must not claim its files as well.
                             files = sql.execute(
                                 "SELECT f.id FROM attachments f JOIN actions a ON a.id=f.action_id "
-                                "WHERE f.task_id=? AND a.status='completed' AND f.created>=? ORDER BY f.created,f.id",
-                                (row["task_id"], row["created"]),
+                                "WHERE f.task_id=? AND a.status='completed' AND f.created>=COALESCE("
+                                "(SELECT MAX(finished) FROM messages WHERE task_id=? AND id<>?),?) "
+                                "ORDER BY f.created,f.id",
+                                (row["task_id"], row["task_id"], row["id"], row["created"]),
                             ).fetchall()
                             enqueue(
                                 sql,

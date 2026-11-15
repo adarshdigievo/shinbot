@@ -84,6 +84,8 @@ export function chatControls({root,api,selection,save,settings,escape,icon,toast
   panel.addEventListener('keydown',event=>{
     if(event.key==='Escape'){panel.hidePopover();button.focus();}
     // The picker sits inside the composer form. Enter here must choose a model, never send the draft.
+    // Enter that confirms an input-method candidate belongs to the text being composed.
+    if(event.isComposing||event.keyCode===229)return;
     if(event.key==='Enter'&&event.target.matches('input')){event.preventDefault();if(event.target===search)list.querySelector('button:not(:disabled)')?.click();}
     if(['ArrowDown','ArrowUp'].includes(event.key)&&(event.target===search||event.target.closest('.model-option'))){
       const items=[search,...list.querySelectorAll('button:not(:disabled)')],index=items.indexOf(document.activeElement);
