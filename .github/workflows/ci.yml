@@ -91,12 +91,17 @@ jobs:
       - run: uv run --frozen --extra security python tests/run_token_budgets.py
       - run: uv run --frozen --extra security python tests/run_prompt_suggestions.py
       - run: uv run --frozen --extra security python tests/run_chat_queue.py
-      - name: Test Camoufox and chat file delivery
+      - name: Install Camoufox
+        # Its downloader lists releases through the GitHub API, which rate-limits anonymous
+        # requests from shared runners. The token stays in this step, away from the journey.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           uv sync --frozen --extra computer --extra security --extra browser
           uv run --no-sync playwright install-deps firefox
           uv run --no-sync python -m camoufox fetch official/stable/156.0.1-beta.36
-          uv run --no-sync python tests/run_attachments.py
+      - name: Test Camoufox and chat file delivery
+        run: uv run --no-sync python tests/run_attachments.py
   workflows:
     name: Workflow syntax
     runs-on: ubuntu-24.04
