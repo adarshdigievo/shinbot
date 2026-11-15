@@ -23,6 +23,10 @@ class Config:
     computer_token: str = field(default_factory=lambda: os.getenv("SHINBOT_COMPUTER_TOKEN", ""))
     browser_token: str = field(default_factory=lambda: os.getenv("SHINBOT_BROWSER_TOKEN", ""))
     safe_mode: bool = field(default_factory=lambda: os.getenv("SHINBOT_SAFE_MODE", "0") == "1")
+    # Reverse proxies in front of the gateway that append the client to X-Forwarded-For. 0 trusts none.
+    trusted_proxies: int = field(
+        default_factory=lambda: int(v) if (v := os.getenv("SHINBOT_TRUSTED_PROXIES", "0")).isdigit() else 0
+    )
     coordinate: bool = True
 
     def prepare(self):

@@ -117,7 +117,7 @@ class Calendar:
         return await self._finish(digest(session), state, code, error)
 
     async def finish_browser(self, cookie, state, code, error=None):
-        if not cookie or not state or not secrets.compare_digest(cookie, state):
+        if not cookie or not state or not secrets.compare_digest(cookie.encode(), state.encode()):
             raise ValueError("This sign-in link does not belong to this browser. Connect Google again.")
         row = self.db.one("SELECT session_hash FROM oauth_pending WHERE state=?", (digest(state),))
         if not row or not self.db.one(

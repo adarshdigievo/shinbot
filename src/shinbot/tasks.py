@@ -4,6 +4,7 @@ import time
 
 from .chat_options import ChatOptions
 from .db import packed, uid
+from .errors import Conflict, NotFound
 
 TERMINAL = {"completed", "failed", "cancelled"}
 LEGACY_BUDGET_ERROR = "This task reached its token budget. Check the card’s budget and Settings → Workspace. Raise or clear the cap before resuming."
@@ -133,7 +134,7 @@ class Tasks:
             prior = db.execute("SELECT * FROM task_requests WHERE request_id=?", (request_id,)).fetchone()
             if prior:
                 if prior["hash"] != digest:
-                    raise ValueError("Request ID was already used with different content.")
+                    raise Conflict("Request ID was already used with different content.")
                 return dict(
                     db.execute("SELECT id,title,status FROM tasks WHERE id=?", (prior["task_id"],)).fetchone()
                 )
@@ -149,7 +150,7 @@ class Tasks:
         ).fetchone()
         if prior:
             if prior["hash"] != digest:
-                raise ValueError("This request ID was already used for another message.")
+                raise Conflict("This request ID was already used for another message.")
             return dict(prior)
         key = uid()
         db.execute(
@@ -166,9 +167,11 @@ class Tasks:
         with self.db.transaction() as db:
             task = db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
             if not task:
-                raise ValueError("Task not found.")
-            if task["status"] in {"paused", "uncertain", "cancelled"}:
-                raise ValueError("Resolve or resume this task before sending another message.")
+                raise NotFound("Task not found.")
+            if task["status"] == "cancelled":
+                raise Conflict("This conversation was stopped. Start a new one to continue.")
+            if task["status"] in {"paused", "uncertain"}:
+                raise Conflict("Resolve or resume this task before sending another message.")
             if task["workspace_id"]:
                 workspace = db.execute(
                     "SELECT state FROM project_workspaces WHERE id=?", (task["workspace_id"],)
@@ -192,9 +195,11 @@ class Tasks:
                 (message_id, task_id),
             ).fetchone()
             if not row:
-                raise ValueError("Message not found.")
-            if row["task_status"] in {"paused", "uncertain", "cancelled"}:
-                raise ValueError("Resolve or resume this task before steering it.")
+                raise NotFound("Message not found.")
+            if row["task_status"] == "cancelled":
+                raise Conflict("This conversation was stopped. Start a new one to continue.")
+            if row["task_status"] in {"paused", "uncertain"}:
+                raise Conflict("Resolve or resume this task before steering it.")
             if row["mode"] != "steer":
                 if row["status"] != "queued":
                     raise ValueError(
@@ -206,7 +211,7 @@ class Tasks:
     def detail(self, task_id):
         task = self.db.one("SELECT * FROM tasks WHERE id=?", (task_id,))
         if not task:
-            raise ValueError("Task not found.")
+            raise NotFound("Task not found.")
         task["grants"] = json.loads(task["grants"])
         task["extensions"] = json.loads(task["extensions"])
         task["messages"] = self.db.all(
@@ -280,7 +285,7 @@ class Tasks:
         with self.db.transaction() as db:
             task = db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
             if not task:
-                raise ValueError("Task not found.")
+                raise NotFound("Task not found.")
             if (
                 set(values) - {"approval_mode"}
                 and db.execute(

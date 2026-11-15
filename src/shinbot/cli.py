@@ -181,7 +181,7 @@ def compose_file():
     return Path(__file__).parent / "deployment/compose.yaml"
 
 
-def compose(*args, check=True, capture=False, configuration=None, timeout=None):
+def compose(*args, check=True, capture=False, configuration=None, timeout=None, input=None):
     if not (home() / "deploy.env").exists():
         raise typer.BadParameter("This installation has not been started. Run shinbot start first.")
     result = subprocess.run(
@@ -206,6 +206,7 @@ def compose(*args, check=True, capture=False, configuration=None, timeout=None):
         capture_output=capture,
         text=True,
         timeout=timeout,
+        input=input,
         **maintenance.child_lock(),
     )
     if check and result.returncode:
@@ -258,7 +259,6 @@ def start(
                 "SHINBOT_SERVICE_TOKEN",
                 "SHINBOT_COMPUTER_TOKEN",
                 "SHINBOT_BROWSER_TOKEN",
-                "SHINBOT_CHANNEL_TOKEN",
             ]
         }
         values.update(
@@ -272,7 +272,7 @@ def start(
     values.update(SHINBOT_DOCKER_CONTEXT=command[2], SHINBOT_DOCKER_ENGINE=docker_engine(command))
     write_private(env, "\n".join(f"{k}={v}" for k, v in values.items()) + "\n")
     try:
-        compose(*arguments)
+        compose("up", "-d", *(["--build"] if build else []))
     finally:
         # A partial first start can create usable data even when another service fails.
         configuration = compose("config", "--format", "json", capture=True, check=False)
@@ -324,6 +324,60 @@ def setup_token():
     """Show the one-time installation token on this host."""
     result = compose("exec", "-T", "control", "cat", "/data/bootstrap-token", capture=True)
     typer.echo(result.stdout)
+
+
+# Runs beside the gateway's data. Exit 3 carries a message for the owner; anything else is the host's.
+RESET_PASSWORD = """
+import sys
+from shinbot.auth import hash_password
+from shinbot.config import Config
+from shinbot.db import Database, packed
+path = Config().data / 'shinbot.sqlite'
+db = Database(path) if path.is_file() else None
+if db is None or db.setting('password') is None:
+    print('This installation has no owner yet. Run shinbot setup-token and finish setup in the browser.')
+    sys.exit(3)
+encoded = hash_password(sys.stdin.readline().rstrip('\\n'))
+with db.transaction() as sql:
+    sql.execute("UPDATE settings SET value=? WHERE key='password'", (packed(encoded),))
+    sql.execute('DELETE FROM sessions')
+"""
+
+
+@app.command()
+def reset_password(native: bool = False):
+    """Set a new owner password from this host and sign out every device."""
+    from . import native as host
+
+    native = native or (not (home() / "deploy.env").exists() and (host.directory() / "config.json").is_file())
+    password = typer.prompt("New password", hide_input=True, confirmation_prompt=True)
+    if not 12 <= len(password) <= 256 or "\n" in password:
+        raise typer.BadParameter("Use a password between 12 and 256 characters.")
+    # The password travels on standard input, never in a command line or the environment.
+    if native:
+        try:
+            root, config = host.configuration()
+        except ValueError as error:
+            raise typer.BadParameter(str(error)) from None
+        result = subprocess.run(
+            [config["python"], "-c", RESET_PASSWORD],
+            env=host.service_environment(root, config),
+            cwd=root,
+            input=password + "\n",
+            capture_output=True,
+            text=True,
+        )
+    else:
+        result = compose(
+            "exec", "-T", "control", "python", "-c", RESET_PASSWORD, capture=True, check=False, input=password + "\n"
+        )
+    if result.returncode == 3:
+        raise typer.BadParameter(result.stdout.strip())
+    if result.returncode:
+        raise typer.BadParameter(
+            "The password was not changed. Check that ShinBot is running on this host, then try again."
+        )
+    typer.echo("Password reset. Every device was signed out. Sign in with the new password.")
 
 
 @app.command()
@@ -590,7 +644,7 @@ def version():
     typer.echo(__version__)
 
 
-def volume_operation(operation, file, configuration=None):
+def volume_operation(operation, file, configuration=None, trusted=False):
     configuration = configuration or json.loads(compose("config", "--format", "json", capture=True).stdout)
     command = [
         *docker(),
@@ -604,6 +658,8 @@ def volume_operation(operation, file, configuration=None):
         f"SHINBOT_BACKUP_UID={os.getuid()}",
         "-e",
         f"SHINBOT_BACKUP_GID={os.getgid()}",
+        # This installation's own archives may hold more files than one from elsewhere.
+        *(["-e", "SHINBOT_BACKUP_TRUSTED=1"] if trusted else []),
     ]
     for key, value in configuration["volumes"].items():
         command += ["--mount", f"type=volume,source={value['name']},target=/volumes/{key}"]
@@ -627,7 +683,9 @@ def backup(destination: Path):
     try:
         maintenance.backup(destination.resolve())
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        raise typer.BadParameter("Backup could not finish. Check disk space and Docker, then retry.") from exc
+        raise typer.BadParameter(
+            "Backup could not finish. Any reason is printed above; otherwise check disk space and Docker."
+        ) from exc
 
 
 @app.command()
@@ -650,15 +708,20 @@ def backup_info(source: Path):
 
 
 @app.command()
-def restore(source: Path, replace: bool = False):
-    """Restore a full backup; preserve this host's address and hold automated work for review."""
+def restore(source: Path, replace: bool = False, trusted: bool = False):
+    """Restore a full backup; preserve this host's address and hold automated work for review.
+
+    Use --trusted for a very large backup that you made yourself."""
     if not replace:
         raise typer.BadParameter(
             "Use --replace to replace this installation's data. A pre-restore backup is saved first."
         )
     try:
-        maintenance.restore(source)
-    except (OSError, ValueError, tarfile.TarError, subprocess.SubprocessError) as exc:
+        maintenance.restore(source, trusted)
+    except ValueError as exc:
+        # Validation messages name what is wrong with the archive and hold no secrets.
+        raise typer.BadParameter(f"Restore could not finish. {exc}") from exc
+    except (OSError, tarfile.TarError, subprocess.SubprocessError) as exc:
         raise typer.BadParameter(
             "Restore could not finish. Check the backup and Docker. See any recovery path printed above."
         ) from exc
@@ -757,8 +820,7 @@ def telegram_setup():
     telegram_moved()
 
 
-@app.command()
-@maintenance.guarded
+@app.command(hidden=True)
 def telegram_stop():
     """Telegram is now disabled from the web app."""
     telegram_moved()

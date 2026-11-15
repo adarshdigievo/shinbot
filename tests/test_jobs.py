@@ -9,9 +9,12 @@ def stamp(value):
     return datetime.fromisoformat(value).timestamp()
 
 
-def test_cron_skips_dst_gap_and_second_fold():
+def test_cron_runs_a_skipped_time_after_the_jump_and_a_fixed_time_once():
     after = stamp("2026-03-07T12:00:00+00:00")
-    assert next_run("cron", "30 2 * * *", "America/New_York", after) == stamp("2026-03-09T06:30:00+00:00")
+    # 02:30 does not exist on 8 March in New York; the job runs when the clocks reach 03:00 EDT.
+    skipped = next_run("cron", "30 2 * * *", "America/New_York", after)
+    assert skipped == stamp("2026-03-08T07:00:00+00:00")
+    assert next_run("cron", "30 2 * * *", "America/New_York", skipped) == stamp("2026-03-09T06:30:00+00:00")
     after = stamp("2026-11-01T05:31:00+00:00")
     assert next_run("cron", "30 1 * * *", "America/New_York", after) == stamp("2026-11-02T06:30:00+00:00")
 

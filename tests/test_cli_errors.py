@@ -91,9 +91,6 @@ def test_login_uses_saved_installation_address_unless_overridden(monkeypatch, tm
 
 def test_old_telegram_commands_point_to_the_app(monkeypatch, tmp_path):
     monkeypatch.setenv("SHINBOT_HOME", str(tmp_path))
-    path = tmp_path / "deploy.env"
-    path.write_text("SHINBOT_ORIGIN=http://localhost:8765\n")
-    before = path.read_text()
     calls = []
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: calls.append(args))
     for command in (["telegram-setup"], ["telegram-stop"], ["native", "telegram-setup"]):
@@ -122,6 +119,7 @@ def test_start_retires_the_old_telegram_container(monkeypatch, tmp_path):
         "--filter",
         "label=com.docker.compose.service=telegram",
     ]
+    assert commands[1] == ["docker", "--context", "default", "rm", "-f", "abc123"]
 
 
 @pytest.mark.parametrize("operation", ["backup", "restore"])

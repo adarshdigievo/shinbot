@@ -1,8 +1,10 @@
 import asyncio
 import fcntl
 import json
+import logging
 import mimetypes
 import re
+import sqlite3
 import time
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -23,8 +25,11 @@ from .chat_options import ApprovalMode, ChatOptions, ThinkingLevel
 from .config import Config
 from .core import Core
 from .db import packed, uid
+from .errors import Conflict, NotFound
 from .jobs import schedule_preview, time_zone
 from .notifications import ReadNotifications
+
+log = logging.getLogger(__name__)
 
 
 class Message(BaseModel):
@@ -33,6 +38,11 @@ class Message(BaseModel):
     request_id: str = Field(default_factory=uid, min_length=1, max_length=128)
     options: ChatOptions | None = None
     mode: Literal["queue", "steer"] = "queue"
+
+
+class PasswordChange(BaseModel):
+    current: str
+    new: str
 
 
 class PromptSuggestion(BaseModel):
@@ -86,6 +96,8 @@ def create_app(config: Config | None = None):
         core.recover()
         worker = asyncio.create_task(core.coordinator.run()) if config.coordinate else None
         releases = asyncio.create_task(core.updates.run()) if config.coordinate else None
+        cleanup = asyncio.create_task(retention.run(core.db)) if config.coordinate else None
+        channel = asyncio.create_task(telegram.run(core)) if config.coordinate else None
         yield
         if channel:
             channel.cancel()
@@ -100,8 +112,6 @@ def create_app(config: Config | None = None):
             with suppress(asyncio.CancelledError):
                 await worker
         for task in list(core.running_actions.values()):
-        cleanup = asyncio.create_task(retention.run(core.db)) if config.coordinate else None
-        channel = asyncio.create_task(telegram.run(core)) if config.coordinate else None
             task.cancel()
         await asyncio.gather(*list(core.running_actions.values()), return_exceptions=True)
         await core.close()
@@ -162,8 +172,25 @@ def create_app(config: Config | None = None):
         return JSONResponse({"detail": "Missing or invalid request field."}, status_code=400)
 
     @app.exception_handler(ValueError)
+    @app.exception_handler(NotFound)
+    @app.exception_handler(Conflict)
     async def value_error(request, exc):
-        return JSONResponse({"detail": str(exc)[:1000]}, status_code=400)
+        status = 404 if isinstance(exc, NotFound) else 409 if isinstance(exc, Conflict) else 400
+        return JSONResponse({"detail": str(exc)[:1000]}, status_code=status)
+
+    @app.exception_handler(TypeError)
+    @app.exception_handler(AttributeError)
+    @app.exception_handler(sqlite3.ProgrammingError)
+    async def wrong_type(request, exc):
+        # Untyped JSON bodies reach owner routes as sent; a field of the wrong type is the caller's error.
+        if (
+            request.method not in {"POST", "PUT", "PATCH"}
+            or not request.url.path.startswith(("/api/", "/auth/"))
+            or (isinstance(exc, sqlite3.Error) and "binding parameter" not in str(exc))
+        ):
+            raise exc
+        log.warning("Rejected %s %s: a field has the wrong type.", request.method, request.url.path, exc_info=exc)
+        return JSONResponse({"detail": "Missing or invalid request field."}, status_code=400)
 
     @app.exception_handler(ValidationError)
     async def invalid_value(request, exc):
@@ -255,35 +282,36 @@ def create_app(config: Config | None = None):
     async def login(request: Request, payload: dict):
         if request.headers.get("origin") not in {None, config.origin}:
             raise HTTPException(403, f"Open ShinBot at {config.origin} to sign in.")
-        core.auth.rate_limit(request.client.host)
+        peer = core.auth.client(request)
         password = payload.get("password", "")
         if not isinstance(password, str) or len(password) > 256:
             raise HTTPException(400, "Invalid password.")
-        current = core.db.setting("password")
-        if current is None:
-            import hmac
+        async with core.auth.attempt(peer):
+            current = core.db.setting("password")
+            if current is None:
+                import hmac
 
-            if not core.auth.bootstrap or not hmac.compare_digest(
-                str(payload.get("bootstrap", "")), core.auth.bootstrap
-            ):
-                raise HTTPException(401, "Enter the installation's bootstrap token.")
-            encoded = await asyncio.to_thread(hash_password, password)
-            zone = payload.get("timezone", "UTC")
-            try:
-                time_zone(zone)
-            except (ValueError, TypeError):
-                raise HTTPException(400, "Choose a valid timezone, such as Asia/Kolkata.")
-            with core.db.transaction() as db:
-                if db.execute("SELECT 1 FROM settings WHERE key='password'").fetchone():
-                    raise HTTPException(409, "This installation was already claimed.")
-                db.execute("INSERT INTO settings VALUES ('password',?)", (packed(encoded),))
-                preferences = json.loads(
-                    db.execute("SELECT value FROM settings WHERE key='preferences'").fetchone()[0]
-                )
-                preferences["timezone"] = zone
-                db.execute("UPDATE settings SET value=? WHERE key='preferences'", (packed(preferences),))
-        elif not await asyncio.to_thread(verify_password, password, current):
-            raise HTTPException(401, "Incorrect password.")
+                if not core.auth.bootstrap or not hmac.compare_digest(
+                    str(payload.get("bootstrap", "")).encode(), core.auth.bootstrap.encode()
+                ):
+                    await core.auth.failed(peer, 401, "Enter the installation's bootstrap token.")
+                encoded = await asyncio.to_thread(hash_password, password)
+                zone = payload.get("timezone", "UTC")
+                try:
+                    time_zone(zone)
+                except (ValueError, TypeError):
+                    raise HTTPException(400, "Choose a valid timezone, such as Asia/Kolkata.")
+                with core.db.transaction() as db:
+                    if db.execute("SELECT 1 FROM settings WHERE key='password'").fetchone():
+                        raise HTTPException(409, "This installation was already claimed.")
+                    db.execute("INSERT INTO settings VALUES ('password',?)", (packed(encoded),))
+                    preferences = json.loads(
+                        db.execute("SELECT value FROM settings WHERE key='preferences'").fetchone()[0]
+                    )
+                    preferences["timezone"] = zone
+                    db.execute("UPDATE settings SET value=? WHERE key='preferences'", (packed(preferences),))
+            elif not await asyncio.to_thread(verify_password, password, current):
+                await core.auth.failed(peer, 401, "Incorrect password.")
         cli = payload.get("cli") is True
         token = core.auth.session("cli" if cli else "browser")
         response = JSONResponse({"ok": True, **({"token": token} if cli else {})})
@@ -310,6 +338,20 @@ def create_app(config: Config | None = None):
     @api.post("/sessions/revoke")
     async def revoke():
         core.db.execute("DELETE FROM sessions")
+        return {"ok": True}
+
+    @api.post("/auth/password")
+    async def change_password(request: Request, change: PasswordChange):
+        peer, token = core.auth.client(request), core.auth.require(request)
+        async with core.auth.attempt(peer):
+            saved = core.db.setting("password")
+            if len(change.current) > 256 or not await asyncio.to_thread(verify_password, change.current, saved):
+                await core.auth.failed(peer, 403, "Current password is incorrect. Your password was not changed.")
+        encoded = await asyncio.to_thread(hash_password, change.new)
+        with core.db.transaction() as db:
+            db.execute("UPDATE settings SET value=? WHERE key='password'", (packed(encoded),))
+            # Everyone else signs in again; this device stays signed in.
+            db.execute("DELETE FROM sessions WHERE hash<>?", (digest(token),))
         return {"ok": True}
 
     @api.get("/status")
@@ -346,10 +388,16 @@ def create_app(config: Config | None = None):
 
     @api.put("/settings")
     async def put_settings(preferences: Preferences):
+        # Fields the client left out keep their saved values instead of returning to defaults.
+        saved = {"browser_backend": "chromium", **core.db.setting("preferences")}
+        preferences = Preferences.model_validate(
+            {
+                **{key: value for key, value in saved.items() if key in Preferences.model_fields},
+                **preferences.model_dump(exclude_unset=True),
+            }
+        )
         time_zone(preferences.timezone)
-        if "browser_backend" not in preferences.model_fields_set:
-            preferences.browser_backend = core.db.setting("preferences").get("browser_backend", "chromium")
-        if preferences.browser_backend != core.db.setting("preferences").get("browser_backend", "chromium"):
+        if preferences.browser_backend != saved["browser_backend"]:
             availability = await core.remote("browser", "/backends", method="GET")
             selected = next(
                 (b for b in availability["backends"] if b["id"] == preferences.browser_backend), None
@@ -416,7 +464,8 @@ def create_app(config: Config | None = None):
 
     @api.post("/bot-groups")
     async def create_group(payload: dict):
-        name = payload.get("name", "").strip()
+        name = payload.get("name")
+        name = name.strip() if isinstance(name, str) else ""
         if not name or len(name) > 100:
             raise ValueError("Give the group a name of 1–100 characters.")
         key = uid()
@@ -557,8 +606,7 @@ def create_app(config: Config | None = None):
 
     @api.post("/tasks/{task_id}/cancel")
     async def cancel(task_id: str):
-        await core.cancel(task_id)
-        return {"cancelled": True}
+        return {"cancelled": await core.cancel(task_id)}
 
     @api.post("/tasks/{task_id}/compact")
     async def compact(task_id: str):

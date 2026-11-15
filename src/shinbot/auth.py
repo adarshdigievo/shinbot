@@ -1,7 +1,9 @@
+import asyncio
 import hashlib
 import hmac
 import secrets
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import HTTPException, Request
 
@@ -29,15 +31,51 @@ class Auth:
     def __init__(self, db, config):
         self.db, self.config = db, config
         self.bootstrap = secret_file(config.data / "bootstrap-token")
-        self.attempts = {}
+        self.attempts, self.pending, self.turns = {}, {}, {}
+        self.penalty = 3
 
-    def rate_limit(self, host):
+    def client(self, request):
+        # Each trusted proxy appends the address it saw; entries further left are client-supplied.
+        hops = self.config.trusted_proxies
+        forwarded = [part.strip() for part in request.headers.get("x-forwarded-for", "").split(",")]
+        if hops and len(forwarded) >= hops and forwarded[-hops]:
+            return forwarded[-hops]
+        return request.client.host
+
+    def failures(self, host):
         now = time.time()
         self.attempts = {k: v for k, v in self.attempts.items() if v[-1] > now - 60}
-        attempts = [t for t in self.attempts.get(host, []) if t > now - 60]
-        if len(attempts) >= 8:
+        return [t for t in self.attempts.get(host, []) if t > now - 60]
+
+    @asynccontextmanager
+    async def attempt(self, host):
+        """Check a password inside this block. Only failures count, so a correct password is not
+        refused for wrong guesses from the same address; past the limit, guesses take turns."""
+        waiting = self.pending.get(host, 0)
+        slow = len(self.failures(host)) + waiting >= 8
+        if slow and waiting >= 12:
             raise HTTPException(429, "Too many attempts. Try again in a minute.")
-        self.attempts[host] = attempts + [now]
+        self.pending[host] = waiting + 1
+        try:
+            if slow:
+                async with self.turns.setdefault(host, asyncio.Lock()):
+                    yield
+            else:
+                yield
+        finally:
+            self.pending[host] -= 1
+            if not self.pending[host]:
+                del self.pending[host]
+                self.turns.pop(host, None)
+
+    async def failed(self, host, status, detail):
+        limited = len(self.failures(host)) >= 8
+        self.attempts[host] = self.failures(host) + [time.time()]
+        if limited:
+            # Still inside this address's turn: the wait bounds guesses however many connections it opens.
+            await asyncio.sleep(self.penalty)
+            raise HTTPException(429, "Too many attempts. Try again in a minute.")
+        raise HTTPException(status, detail)
 
     def session(self, kind="browser"):
         token = secrets.token_urlsafe(32)
@@ -64,5 +102,7 @@ class Auth:
 
 
 def require_service(request: Request, token: str):
-    if not token or not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {token}"):
+    # Header text is Latin-1; compare_digest only accepts ASCII strings, so compare bytes.
+    header = request.headers.get("authorization", "").encode("latin-1", "replace")
+    if not token or not hmac.compare_digest(header, f"Bearer {token}".encode()):
         raise HTTPException(401, "Invalid service credential.")

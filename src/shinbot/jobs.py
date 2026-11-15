@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from croniter import croniter
 
 from .db import packed, uid
+from .errors import NotFound
 
 
 def time_zone(value):
@@ -40,16 +41,47 @@ def next_run(kind, spec, tz, after):
         return after + seconds
     if kind != "cron" or not isinstance(spec, str) or len(spec.split()) != 5 or not croniter.is_valid(spec):
         raise ValueError("Use a five-field cron expression, such as 0 9 * * * for 9 AM each day.")
-    # Iterate wall time, then round-trip through UTC to reject DST gaps and fold=1.
-    wall = datetime.fromtimestamp(after, zone).replace(tzinfo=None)
-    iterator = croniter(spec, wall)
+    run = cron_run(spec, zone, after, 1)
+    if run is None:
+        raise ValueError("No valid upcoming run was found.")
+    return run
+
+
+def instants(wall, zone, repeat):
+    """UTC times of one wall-clock match. A time skipped by a clock change runs at the first valid
+    instant after it; a repeated hour runs on both passes for jobs with a wildcard minute or hour."""
+    first, second = (wall.replace(tzinfo=zone, fold=fold).timestamp() for fold in (0, 1))
+    if first <= second:
+        return [first, second] if repeat and first < second else [first]
+    low, high = int(second), int(first)
+    before = datetime.fromtimestamp(low, zone).utcoffset()
+    while high - low > 1:
+        middle = (low + high) // 2
+        if datetime.fromtimestamp(middle, zone).utcoffset() == before:
+            low = middle
+        else:
+            high = middle
+    return [float(high)]
+
+
+def cron_run(spec, zone, moment, direction):
+    """The first run after a UTC moment (direction 1) or the latest one at or before it (-1)."""
+    # Wall times map out of order around a clock change, so start three hours on the far side.
+    start = datetime.fromtimestamp(moment, zone).replace(tzinfo=None) - direction * timedelta(hours=3)
+    iterator, repeat = croniter(spec, start), any(part.startswith("*") for part in spec.split()[:2])
+    best = None
     for _ in range(10000):
-        candidate = iterator.get_next(datetime).replace(tzinfo=zone, fold=0)
-        stamp = candidate.timestamp()
-        back = datetime.fromtimestamp(stamp, zone)
-        if back.replace(tzinfo=None) == candidate.replace(tzinfo=None) and stamp > after:
-            return stamp
-    raise ValueError("No valid upcoming run was found.")
+        wall = iterator.get_next(datetime) if direction > 0 else iterator.get_prev(datetime)
+        stamps = instants(wall, zone, repeat)
+        if direction > 0:
+            if best is not None and stamps[0] >= best:
+                break
+            best = min([s for s in stamps if s > moment] + ([] if best is None else [best]), default=None)
+        else:
+            if best is not None and stamps[-1] <= best:
+                break
+            best = max([s for s in stamps if s <= moment] + ([] if best is None else [best]), default=None)
+    return best
 
 
 def schedule_preview(data):
@@ -88,7 +120,7 @@ class Jobs:
         now = time.time()
         old = self.db.one("SELECT * FROM schedules WHERE id=?", (job_id,)) if job_id else None
         if job_id and not old:
-            raise ValueError("Job not found.")
+            raise NotFound("Job not found.")
         if old and old["archived"]:
             raise ValueError("Restore this job before editing it.")
         if old:
@@ -161,7 +193,7 @@ class Jobs:
     def toggle(self, key, enabled):
         job = self.db.one("SELECT * FROM schedules WHERE id=?", (key,))
         if not job:
-            raise ValueError("Job not found.")
+            raise NotFound("Job not found.")
         if job["archived"]:
             raise ValueError("Restore this job before resuming it.")
         if enabled and not self.db.one("SELECT 1 FROM bots WHERE id=? AND archived=0", (job["bot_id"],)):
@@ -177,7 +209,7 @@ class Jobs:
         with self.db.transaction() as db:
             job = db.execute("SELECT * FROM schedules WHERE id=?", (key,)).fetchone()
             if not job:
-                raise ValueError("Job not found.")
+                raise NotFound("Job not found.")
             if not archived and not job["archived"]:
                 return
             db.execute("UPDATE schedules SET archived=?,enabled=0 WHERE id=?", (int(archived), key))
@@ -234,18 +266,9 @@ class Jobs:
             elif job["kind"] == "cron":
                 # One coalesced occurrence, bounded even after a long outage.
                 following = next_run("cron", job["spec"], job["timezone"], now)
-                zone = ZoneInfo(job["timezone"])
-                wall = datetime.fromtimestamp(now, zone).replace(tzinfo=None)
-                iterator = croniter(job["spec"], wall + timedelta(microseconds=1))
-                # Inclusive most recent valid occurrence; skip spring gaps and second folds.
-                cursor = iterator.get_prev(datetime)
-                for _ in range(10000):
-                    candidate = cursor.replace(tzinfo=zone, fold=0)
-                    stamp = candidate.timestamp()
-                    if stamp <= now and datetime.fromtimestamp(stamp, zone).replace(tzinfo=None) == cursor:
-                        intended = stamp
-                        break
-                    cursor = iterator.get_prev(datetime)
+                # The most recent occurrence at or before now, under the same clock-change rules.
+                recent = cron_run(job["spec"], ZoneInfo(job["timezone"]), now, -1)
+                intended = max(intended, recent or intended)
             busy = db.execute(
                 "SELECT t.id,t.status FROM tasks t JOIN occurrences o ON o.task_id=t.id "
                 "WHERE o.schedule_id=? AND t.status IN ('queued','running','waiting','paused','uncertain')",

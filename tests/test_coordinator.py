@@ -263,3 +263,42 @@ async def test_cancellation_during_submit_preserves_submission_and_final_usage(a
     await core.coordinator.tick()
     assert core.db.one("SELECT tokens FROM tasks WHERE id=?", (task["id"],))["tokens"] == 30000
     assert not core.db.all("SELECT * FROM pending_aborts")
+
+
+async def test_internal_runtime_errors_are_retried_then_failed_while_holds_wait(application, monkeypatch):
+    import httpx
+
+    core = application.state.core
+    status = {"code": 500}
+
+    async def failing(method, path, **kwargs):
+        if path == "/v1/health":
+            return {"held": False}
+        request = httpx.Request(method, "http://runtime" + path)
+        response = httpx.Response(status["code"], json={"error": "database is locked"}, request=request)
+        raise httpx.HTTPStatusError("runtime failed", request=request, response=response)
+
+    async def reconciled():
+        core.coordinator.ready = True
+
+    monkeypatch.setattr(core.coordinator, "request", failing)
+    monkeypatch.setattr(core.coordinator, "reconcile", reconciled)
+    task = core.tasks.create("Summarise the report")
+    core.coordinator.ready = True
+    await core.coordinator.tick()
+    message = core.db.one("SELECT * FROM messages")
+    assert message["status"] != "failed" and not core.coordinator.ready
+    assert core.coordinator.last_error == "HTTPStatusError"
+    # A runtime that is held or restarting answers 503; that is waited out however long it takes.
+    status["code"] = 503
+    core.coordinator.runtime_errors[message["id"]] = time.monotonic() - 3600
+    core.coordinator.ready = True
+    await core.coordinator.tick()
+    assert core.db.one("SELECT status FROM messages")["status"] != "failed"
+    status["code"] = 500
+    core.coordinator.ready = True
+    await core.coordinator.tick()
+    failed = core.db.one("SELECT status,error FROM messages")
+    assert failed["status"] == "failed" and "kept failing" in failed["error"]
+    assert core.tasks.detail(task["id"])["status"] == "failed"
+    assert message["id"] not in core.coordinator.runtime_errors

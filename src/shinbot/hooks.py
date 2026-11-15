@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import time
 
 import httpx
 
@@ -49,7 +50,7 @@ class Hooks:
             if saved and "result" in saved:
                 result = saved["result"]
             else:
-                core.db.set(key, {"input_hash": input_hash})
+                core.db.set(key, {"input_hash": input_hash, "at": time.time()})
                 try:
                     receipt = await core.remote("computer", f"/actions/{key}", method="GET", timeout=10)
                     if receipt["status"] == "completed":
@@ -102,7 +103,7 @@ class Hooks:
                         f"{plugin}: the {event} hook failed. Inspect its state before starting a new request."
                     ) from None
                 self.validate(event, result)
-                core.db.set(key, {"input_hash": input_hash, "result": result})
+                core.db.set(key, {"input_hash": input_hash, "result": result, "at": time.time()})
             if result.get("block"):
                 raise HookBlocked(f"{plugin}: {result['block']}")
             output.update({key: value for key, value in result.items() if key != "block"})
@@ -127,9 +128,11 @@ class Hooks:
     async def notify(self, event, event_id, task, data):
         try:
             return await self.run(event, event_id, task, data)
-        except HookBlocked as exc:
+        except (ValueError, KeyError) as exc:
+            # Missing plugin settings or changed files are also the plugin's failure, not a lost service.
             key = "hook-warning:" + event + ":" + event_id
             if not self.core.db.setting(key):
-                self.core.db.event("plugin", str(exc), task.get("task_id") or task["id"])
-                self.core.db.set(key, True)
+                reason = str(exc)[:1000] if isinstance(exc, ValueError) else f"The {event} plugin hook failed."
+                self.core.db.event("plugin", reason, task.get("task_id") or task["id"])
+                self.core.db.set(key, time.time())
             return data

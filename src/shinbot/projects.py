@@ -8,6 +8,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from .db import packed, uid
+from .errors import NotFound
 
 
 class ProjectTask(BaseModel):
@@ -46,7 +47,7 @@ class Projects:
     def get(self, key):
         row = self.db.one("SELECT * FROM projects WHERE id=?", (key,))
         if not row:
-            raise ValueError("Project not found. Add its repository in Projects first.")
+            raise NotFound("Project not found. Add its repository in Projects first.")
         return row
 
     async def add(self, path):
@@ -83,7 +84,7 @@ class Projects:
     def workspace(self, key):
         row = self.db.one("SELECT * FROM project_workspaces WHERE id=?", (key,))
         if not row:
-            raise ValueError("Worktree not found.")
+            raise NotFound("Worktree not found.")
         return row
 
     async def inspect_workspace(self, key, operation="changes", file="."):

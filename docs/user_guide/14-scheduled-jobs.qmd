@@ -19,7 +19,7 @@ For weekday planning at 9am in India:
 shinbot jobs add "Morning planning" "Read my notes and suggest three priorities." "0 9 * * 1-5" --timezone Asia/Kolkata
 ```
 
-Use `UTC`, `Europe/London`, or another valid timezone for schedules elsewhere. Consider daylight-saving changes when choosing a local time.
+Use `UTC`, `Europe/London`, or another valid timezone for schedules elsewhere. Consider daylight-saving changes when choosing a local time. When clocks move forward, a job set for a skipped time runs as soon as the clocks have changed: a 02:30 job runs at 03:00 that day. When clocks move back, a job at a fixed time runs once, and a job with `*` in its minute or hour field keeps its rhythm through the repeated hour.
 
 ## Inspect and change a routine
 

@@ -46,7 +46,7 @@ def installation(monkeypatch, tmp_path):
         events.append(("compose", args))
         return subprocess.CompletedProcess(args, 0, json.dumps(config), "")
 
-    def volume_operation(operation, path, configuration=None):
+    def volume_operation(operation, path, configuration=None, trusted=False):
         events.append((operation, Path(path)))
         if operation == "backup":
             volumes(path)

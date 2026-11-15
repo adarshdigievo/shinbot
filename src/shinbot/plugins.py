@@ -13,7 +13,8 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .db import packed, uid
-from .security import Security
+from .errors import NotFound
+from .security import Security, content_digest
 from .vault import Vault
 
 OFFICIAL = "adarshdigievo/shinbot-official-plugins"
@@ -260,6 +261,7 @@ def unpack_archive(data):
 class Plugins:
     def __init__(self, db, directory):
         self.db, self.directory = db, directory
+        self.validated = set()
         self.vault = Vault(directory.parent / "secrets")
         self.db.execute(
             "INSERT OR IGNORE INTO marketplaces(id,source,catalog) VALUES ('official',?,'{}')", (OFFICIAL,)
@@ -276,10 +278,10 @@ class Plugins:
                     if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"
                 },
             )
-
-    async def repository(self, source, ref="HEAD"):
         # Telegram 1.x needed a separate host service that no longer exists.
         self.db.execute("DELETE FROM plugins WHERE id='telegram' AND version LIKE '1.%'")
+
+    async def repository(self, source, ref="HEAD"):
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", source):
             raise ValueError("Use a GitHub repository in owner/repository form.")
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", ref):
@@ -489,7 +491,7 @@ class Plugins:
             else (
                 "ShinBot work cards"
                 if json.loads(row["manifest"])["kind"] == "builtin"
-                else "Separate host service"
+                else "Runs inside ShinBot and exchanges messages with the connected account"
                 if json.loads(row["manifest"])["kind"] == "channel"
                 else "Trusted JavaScript and styles in the signed-in app"
                 if manifest.get("ui")
@@ -525,7 +527,7 @@ class Plugins:
 
     def set_access(self, plugin, access):
         if not self.db.one("SELECT id FROM plugins WHERE id=?", (plugin,)):
-            raise ValueError("Plugin not installed.")
+            raise NotFound("Plugin not installed.")
         access = self.validate_access(access)
         self.db.execute(
             "INSERT OR REPLACE INTO settings VALUES (?,?)", ("plugin_access:" + plugin, packed(access))
@@ -597,13 +599,17 @@ class Plugins:
     def package(self, plugin, version):
         row = self.db.one("SELECT * FROM plugins WHERE id=? AND version=?", (plugin, version))
         if not row:
-            raise ValueError("Plugin version not installed.")
+            raise NotFound("Plugin version not installed.")
         manifest = json.loads(row["manifest"])
         files = {
             name: (Path(row["path"]) / name).read_bytes()
             for name in manifest["files"] + ["shinbot-plugin.json"]
         }
-        _, digest = validate_package(files)
+        # The bytes are read and hashed on every use; validating them is repeated only when they change.
+        digest = content_digest(files)
+        if digest not in self.validated:
+            validate_package(files)
+            self.validated.add(digest)
         if digest != row["digest"]:
             raise ValueError("Installed plugin contents changed. Reinstall the immutable artifact.")
         return row, files

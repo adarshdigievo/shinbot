@@ -44,7 +44,7 @@ def test_followup_deduplication_and_conflicting_payload(owner):
         owner.post(
             f"/api/tasks/{task}/messages", json={"content": "changed", "request_id": "same"}
         ).status_code
-        == 400
+        == 409
     )
     assert len(owner.get(f"/api/tasks/{task}").json()["messages"]) == 2
 
@@ -53,7 +53,7 @@ def test_notes_optimistic_edit_search_delete(owner):
     note = owner.post("/api/notes", json={"title": "Travel", "body": "Visit Kyoto"}).json()
     edited = owner.post("/api/notes", json={**note, "body": "Visit Kyoto in autumn"})
     assert edited.status_code == 200
-    assert owner.post("/api/notes", json={**note, "body": "stale edit"}).status_code == 400
+    assert owner.post("/api/notes", json={**note, "body": "stale edit"}).status_code == 409
     assert len(owner.get("/api/notes?q=Kyoto").json()) == 1
     assert owner.get("/api/notes?q=%22%20OR%20*").status_code == 200
     assert owner.delete(f"/api/notes/{note['id']}").status_code == 200

@@ -57,7 +57,7 @@ def test_steering_is_idempotent_scoped_and_cannot_change_dispatched_messages(own
     assert core.tasks.message(task, "Second", "second")["mode"] == "steer"
     assert len(core.tasks.detail(task)["messages"]) == 2
     other = core.tasks.create("Another chat")["id"]
-    assert owner.post(f"/api/tasks/{other}/messages/{message['id']}/steer").status_code == 400
+    assert owner.post(f"/api/tasks/{other}/messages/{message['id']}/steer").status_code == 404
     plain = core.tasks.message(task, "Already starting", "plain")
     core.db.execute("UPDATE messages SET status='dispatching' WHERE id=?", (plain["id"],))
     assert owner.post(f"/api/tasks/{task}/messages/{plain['id']}/steer").status_code == 400
@@ -77,13 +77,16 @@ def test_steering_is_idempotent_scoped_and_cannot_change_dispatched_messages(own
             f"/api/tasks/{task}/messages",
             json={"content": "Redirect", "request_id": "steer", "mode": "queue"},
         ).status_code
-        == 400
+        == 409
     )
     assert (
         owner.post(f"/api/tasks/{task}/messages", json={"content": "Bad mode", "mode": "invalid"}).status_code
         == 422
     )
     core.db.execute("UPDATE tasks SET status='cancelled' WHERE id=?", (task,))
+    with pytest.raises(ValueError, match="was stopped"):
+        core.tasks.steer(task, message["id"])
+    core.db.execute("UPDATE tasks SET status='paused' WHERE id=?", (task,))
     with pytest.raises(ValueError, match="resume"):
         core.tasks.steer(task, message["id"])
 
