@@ -145,7 +145,7 @@ try:
         assert activity()["lease"] == {"kind": "agent", "owner": task["id"]}
         assert not mutations, mutations
         page.screenshot(path=str(OUT / "browser-expanded.png"), full_page=True)
-        page.get_by_role("button", name="Picture in picture", exact=False).click()
+        page.get_by_role("button", name="Minimize to preview", exact=False).click()
         expect(page.locator("#computer-preview canvas")).to_be_visible(timeout=10000)
         # Gateway/browser outage clears stale frames and reconnects automatically.
         subprocess.run([*COMPOSE, "stop", "browser"], check=True, capture_output=True)

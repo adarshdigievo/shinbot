@@ -168,7 +168,7 @@ def main():
                 trace = page.locator('[data-entry="action-repository-check"]')
                 trace.locator("summary").click()
                 page.get_by_role("button", name="Decline", exact=True).click()
-                expect(page.locator('[data-entry="action-website-check"]')).to_contain_text("denied")
+                expect(page.locator('[data-entry="action-website-check"]')).to_contain_text("Declined")
                 ordered(expected)
                 expect(trace).to_have_attribute("open", "")
                 progress.update(text="The website needs one more check.", created=stamp + 6)
@@ -233,7 +233,7 @@ def main():
                 page.screenshot(path=str(OUT / "chronological-light.png"), full_page=True)
                 page.evaluate("window.ShinBotTheme.set('dark')")
                 page.evaluate(
-                    "Promise.all(document.getAnimations().filter(a=>a.effect.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))"
+                    "Promise.all(document.getAnimations().filter(a=>a.timeline===document.timeline&&a.effect.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))"
                 )
                 ordered(final)
                 page.screenshot(path=str(OUT / "chronological-dark.png"), full_page=True)

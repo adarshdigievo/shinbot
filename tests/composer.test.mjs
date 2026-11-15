@@ -87,3 +87,18 @@ test('Tab and Escape keep their normal behavior when no suggestion is available'
     assert.equal(e.defaultPrevented, false);
   }
 });
+
+test('On a touch keyboard Enter adds a line and only the send button sends', () => {
+  const input = new EventTarget(), button = {disabled:false};
+  let sends = 0;
+  input.value = 'First line';
+  input.enterKeyHint = '';
+  input.form = {querySelector:()=>button, requestSubmit:()=>{sends++;}};
+  bindComposerKeys(input, {touch:()=>true});
+  const event = new Event('keydown', {cancelable:true});
+  Object.assign(event, {key:'Enter'});
+  input.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, false);
+  assert.equal(sends, 0);
+  assert.equal(input.enterKeyHint, 'enter');
+});

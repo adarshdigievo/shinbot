@@ -247,7 +247,8 @@ def main():
                 page.wait_for_timeout(1600)
                 assert page.evaluate(DELIVERIES) + peer.evaluate(DELIVERIES) == []
                 page.reload()
-                expect(page.locator("#new-bot")).to_be_visible()
+                # A reload keeps the current page, so wait for the shell rather than Home.
+                expect(page.locator("#notifications-toggle")).to_be_visible()
                 page.locator("#notifications-toggle").click()
                 expect(page.locator("#notifications-menu [data-browser-notifications-toggle]")).to_have_text(
                     "Enable notifications"

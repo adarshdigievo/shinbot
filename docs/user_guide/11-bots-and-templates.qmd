@@ -37,7 +37,7 @@ shinbot bots add-repository your-name/your-bot-templates
 
 ## Share a template
 
-Use **Share template** on a bot or **Export group template** for a group. The CLI supports individual exports:
+Use **Export template** on a bot or **Export group template** for a group. The CLI supports individual exports:
 
 ```sh
 shinbot bots list

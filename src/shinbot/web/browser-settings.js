@@ -5,8 +5,10 @@ export function browserSettings(settings, escape) {
 export async function browserAvailability(api, escape, current) {
   let result;
   try { result=await api('/api/browser/backends'); }
-  catch { if(current())document.querySelector('#browser-availability').innerHTML='<p class="hint">The browser service is unavailable. Start it to check installed browsers.</p>';return; }
+  catch { result=null; }
   if(!current())return;
   const container=document.querySelector('#browser-availability');if(!container)return;
+  // A reply without a browser list means the browser service could not answer.
+  if(!Array.isArray(result?.backends)){container.innerHTML='<p class="hint">The browser service is unavailable. Start it to check installed browsers.</p>';return;}
   container.innerHTML=`${result.desktop ? '<p class="hint">Your bots work in a Linux desktop. Open Computer to see it, manage files or take control.</p>' : ''}<h3>Installed browsers</h3>${result.backends.map(b=>`<div class="list-item"><div class="row between"><strong>${escape(b.name)}</strong><span class="pill ${b.ready?'completed':''}">${b.ready?'Ready':'Setup needed'}</span></div>${b.ready?'':`<details><summary>Installation instructions</summary><p class="hint">Run this on the host that runs ShinBot’s browser service, using the same Python environment. agent-browser’s npm installer requires Node.js 24 or newer.</p><pre>${escape(b.setup)}</pre><p class="hint">Then return to Settings. For Docker, see the browser options in the documentation.</p></details>`}</div>`).join('')}`;
 }

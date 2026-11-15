@@ -1,4 +1,4 @@
-export function githubConnection({api,dialog,escape,field,bind,action,toast}) {
+export function githubConnection({api,dialog,confirm,escape,field,bind,action,toast}) {
   return async function connect({target='inbox',version,repositories=[],organizations=[],onDone=()=>{},disconnect}={}) {
     const d=dialog('Connect GitHub','<div data-github-body><p role="status">Checking your connection…</p></div>');
     d.classList.add('github-dialog');
@@ -80,7 +80,7 @@ export function githubConnection({api,dialog,escape,field,bind,action,toast}) {
       if(kinds)kinds.onchange=async()=>{kind=kinds.value;query='';body.querySelector('[data-repo-search]').value='';update();if(!pages[kind])try{await fetchPage();}catch(error){toast(error.message,true);}};
       action(body.querySelector('[data-switch]'),()=>{clearTimeout(timer);signIn();});
       action(body.querySelector('[data-save]'),async()=>{await api('/api/github/select','POST',{target,version,revision,repositories:[...selected.repositories],organizations:[...selected.organizations]});d.close();await onDone();});
-      action(body.querySelector('[data-disconnect]'),async()=>{await disconnect();d.close();await onDone();});
+      action(body.querySelector('[data-disconnect]'),async()=>{if(!await confirm({title:'Disconnect this integration?',body:target==='plugin'?'The GitHub plugin is disabled and its saved token and repository list are removed.':'ShinBot stops following these repositories and removes the inbox token.',confirm:'Disconnect',danger:true}))return;await disconnect();d.close();await onDone();});
       update();
       try{await fetchPage();}catch(error){if(current())toast(error.message,true);}
     }

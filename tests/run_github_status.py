@@ -149,7 +149,7 @@ def main():
                 expect(row(76)).to_contain_text("Issue · Closed")
                 page.screenshot(path=str(OUT / "merged-light.png"), full_page=True)
                 page.evaluate("window.ShinBotTheme.set('dark')")
-                page.evaluate("Promise.all(document.getAnimations().filter(a=>a.effect.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))")
+                page.evaluate("Promise.all(document.getAnimations().filter(a=>a.timeline===document.timeline&&a.effect.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))")
                 page.screenshot(path=str(OUT / "merged-dark.png"), full_page=True)
                 page.reload()
                 open_inbox()

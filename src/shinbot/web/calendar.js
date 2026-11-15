@@ -1,5 +1,5 @@
 import {displayZone, formatTime, calendarDay, dayStart, addDays} from './time.js';
-export function calendarView({api,state,$,escape,icon,dialog,field,bind,action,toast,pageScope,navigate}) {
+export function calendarView({api,state,$,escape,icon,dialog,confirm,field,bind,action,toast,pageScope,navigate}) {
   let start=null, days=7, version=0;
   async function render(){
     const currentVersion=++version,current=()=>pageScope('calendar')()&&currentVersion===version;
@@ -19,7 +19,7 @@ export function calendarView({api,state,$,escape,icon,dialog,field,bind,action,t
   function configure(config){
     const d=dialog('Google Calendar connection',`<form><p>Create a Web application OAuth client in your Google Cloud project and enable the Google Calendar API. Add this exact authorized redirect URI:</p><p><code>${escape(config.redirect_uri)}</code></p><p><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Open Google Cloud credentials</a></p>${field('Client ID','client_id',config.client_id,'text','required autocomplete="off"')}${field('Client secret','client_secret','','password','autocomplete="new-password" '+(!config.configured?'required':''))}<p class="hint">${config.configured?'Leave the secret blank to keep the existing client. Changing client details disconnects the account. ':''}Credentials are encrypted on your server and never added to chat. You will sign in directly with Google and grant read-only calendar access.</p><div class="form-footer"><button type="submit" class="primary">Save and connect Google</button>${config.connected?'<button type="button" id="disconnect-calendar">Disconnect account</button>':''}</div></form>`);
     bind(d.querySelector('form'),async values=>{const changes={};if(values.client_id!==config.client_id)changes.client_id=values.client_id;if(values.client_secret)changes.client_secret=values.client_secret;if(Object.keys(changes).length)await api('/api/calendar/settings','PUT',changes);d.querySelector('[name=client_secret]').value='';const result=await api('/api/calendar/connect','POST',{});d.close();location.assign(result.url);});
-    action(d.querySelector('#disconnect-calendar'),async()=>{await api('/api/calendar/disconnect','POST',{});d.close();toast('Google disconnected locally. You can also revoke access in your Google account.');await render();});
+    action(d.querySelector('#disconnect-calendar'),async()=>{if(!await confirm({title:'Disconnect Google Calendar?',body:'ShinBot deletes its saved Google tokens and stops showing your events. Local jobs and reminders stay.',confirm:'Disconnect account',danger:true}))return;await api('/api/calendar/disconnect','POST',{});d.close();toast('Google disconnected locally. You can also revoke access in your Google account.');await render();});
   }
   async function choose(config){
     const data=await api('/api/calendar/calendars');

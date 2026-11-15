@@ -13,9 +13,9 @@ export function thinkingLevels(providers, selection) {
   return providers.find(p=>p.id===selection.provider)?.models.find(m=>m.id===selection.model)?.thinkingLevels || ['off'];
 }
 
-export function chatControls({root,api,selection,save,settings,escape,icon,toast}) {
+export function chatControls({root,api,selection,save,settings,escape,icon,toast,confirm}) {
   let providers=[],loading=true,saving=false;
-  root.innerHTML=`<button type="button" id="composer-model" class="model-label" aria-label="Choose model" aria-describedby="composer-effort-summary" aria-haspopup="dialog" aria-expanded="false"><span class="composer-model-name"></span><span class="effort-meter" aria-hidden="true"></span>${icon('chevron-down')}</button><span id="composer-effort-summary" class="sr-only"></span><label class="composer-approval"><span class="sr-only">Approval mode</span>${icon('shield-check')}<select id="composer-approval" aria-label="Approval mode">${approvalModes.map(([id,name])=>`<option value="${id}">${name}</option>`).join('')}</select>${icon('chevron-down')}</label><div class="model-popover" popover id="chat-model-picker" role="dialog" aria-label="Choose model"><div class="model-search">${icon('search')}<input type="search" aria-label="Search models" placeholder="Find a model" autocomplete="off"></div><div class="model-options"></div><section class="model-effort" aria-labelledby="effort-heading"><div class="effort-heading"><span id="effort-heading">Thinking effort</span><span class="effort-value"></span></div><div class="effort-levels" role="radiogroup" aria-label="Thinking effort"></div><div class="effort-endpoints" aria-hidden="true"></div><p class="effort-help"></p></section><div class="model-picker-footer"><small class="model-picker-hint"></small><button type="button" class="quiet" data-model-settings>${icon('settings')}Settings</button></div></div>`;
+  root.innerHTML=`<button type="button" id="composer-model" class="model-label" aria-label="Choose model" aria-describedby="composer-effort-summary" aria-haspopup="dialog" aria-expanded="false"><span class="composer-model-name"></span><span class="effort-meter" aria-hidden="true"></span>${icon('chevron-down')}</button><span id="composer-effort-summary" class="sr-only"></span><label class="composer-approval"><span class="sr-only">Approval mode</span>${icon('shield-check')}<select id="composer-approval" aria-label="Approval mode" aria-describedby="composer-approval-help">${approvalModes.map(([id,name])=>`<option value="${id}">${name}</option>`).join('')}</select>${icon('chevron-down')}</label><span id="composer-approval-help" class="sr-only"></span><div class="model-popover" popover id="chat-model-picker" role="dialog" aria-label="Choose model"><div class="model-search">${icon('search')}<input type="search" aria-label="Search models" placeholder="Find a model" autocomplete="off"></div><div class="model-options"></div><section class="model-effort" aria-labelledby="effort-heading"><div class="effort-heading"><span id="effort-heading">Thinking effort</span><span class="effort-value"></span></div><div class="effort-levels" role="radiogroup" aria-label="Thinking effort"></div><div class="effort-endpoints" aria-hidden="true"></div><p class="effort-help"></p></section><div class="model-picker-footer"><small class="model-picker-hint"></small><button type="button" class="quiet" data-model-settings>${icon('settings')}Settings</button></div></div>`;
   const button=root.querySelector('#composer-model'), approval=root.querySelector('#composer-approval');
   const panel=root.querySelector('#chat-model-picker'), search=panel.querySelector('input'), list=panel.querySelector('.model-options'), effort=panel.querySelector('.effort-levels');
   const current=()=>root.isConnected;
@@ -49,9 +49,12 @@ export function chatControls({root,api,selection,save,settings,escape,icon,toast
     panel.querySelector('.effort-value').textContent=effortName(selected.thinking_level);
     panel.querySelector('.effort-endpoints').innerHTML=levels.length>1?`<span>${escape(effortName(levels[0]))}</span><span>${escape(effortName(levels.at(-1)))}</span>`:'';
     panel.querySelector('.effort-help').textContent=busy()?'Available after this reply.':levels.length<2?'This model has no adjustable thinking effort.':'Higher effort gives the model more time to think.';
-    approval.value=selected.approval_mode||'auto';approval.disabled=saving;
+    approval.value=approvalModes.some(([id])=>id===selected.approval_mode)?selected.approval_mode:'auto';approval.disabled=saving;
     approval.style.width=`calc(${approval.selectedOptions[0].text.length}ch + 54px)`;
     approval.title=approvalModes.find(([id])=>id===approval.value)[2];
+    // Full access is marked for as long as it is on, and its meaning is available without hover.
+    approval.closest('label').classList.toggle('is-full',approval.value==='full');
+    root.querySelector('#composer-approval-help').textContent=approval.title;
     list.querySelectorAll('button').forEach(item=>item.disabled=locked);
     panel.querySelector('.model-picker-hint').textContent=busy()?'Wait for this reply to change models.':'Applies to this conversation.';
   }
@@ -80,13 +83,19 @@ export function chatControls({root,api,selection,save,settings,escape,icon,toast
   panel.addEventListener('toggle',()=>button.setAttribute('aria-expanded',String(panel.matches(':popover-open'))));
   panel.addEventListener('keydown',event=>{
     if(event.key==='Escape'){panel.hidePopover();button.focus();}
+    // The picker sits inside the composer form. Enter here must choose a model, never send the draft.
+    if(event.key==='Enter'&&event.target.matches('input')){event.preventDefault();if(event.target===search)list.querySelector('button:not(:disabled)')?.click();}
     if(['ArrowDown','ArrowUp'].includes(event.key)&&(event.target===search||event.target.closest('.model-option'))){
       const items=[search,...list.querySelectorAll('button:not(:disabled)')],index=items.indexOf(document.activeElement);
       event.preventDefault();items[(index+(event.key==='ArrowDown'?1:-1)+items.length)%items.length].focus();
     }
   });
   search.oninput=options;
-  approval.onchange=()=>change({approval_mode:approval.value});
+  approval.onchange=async()=>{
+    const next=approval.value,previous=selectedChoice().approval_mode||'auto';
+    if(next==='full'&&previous!=='full'&&confirm&&!await confirm({title:'Give this chat full access?',body:'The bot will run commands and browser actions without asking first, including ones that change or delete data. It stays on for this conversation until you change it.',confirm:'Use full access',danger:true})){if(current())update();return;}
+    change({approval_mode:next});
+  };
   panel.querySelector('[data-model-settings]').onclick=()=>{panel.hidePopover();settings();};
   update();
   api('/api/providers').then(data=>{if(!current())return;providers=data;loading=false;update();options();}).catch(error=>{if(!current())return;loading=false;update();list.innerHTML=`<p class="picker-empty">${escape(error.message)}</p>`;});
