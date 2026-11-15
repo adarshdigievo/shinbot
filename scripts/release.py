@@ -9,7 +9,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
-SERVICES = ("control", "runtime", "computer", "browser", "telegram")
+SERVICES = ("control", "runtime", "computer", "browser")
 COMPOSE_FILES = ("deploy/compose.yaml", "deploy/compose.release.yaml", "tests/compose.test.yaml")
 VERSION = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:(a|b|rc)(0|[1-9]\d*))?")
 
@@ -75,7 +75,7 @@ def set_version(version, root=ROOT):
         path = root / filename
         path.write_text(
             re.sub(
-                r"(image: .*:)[^\s:]+-(control|runtime|computer|browser|telegram)",
+                r"(image: .*:)[^\s:]+-(control|runtime|computer|browser)",
                 lambda m: f"{m[1]}{version}-{m[2]}",
                 path.read_text(),
             )

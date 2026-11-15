@@ -15,6 +15,7 @@ from .auth import Auth
 from .board import Board
 from .bots import Bots
 from .calendar import Calendar
+from .channels import Telegram
 from .coordinator import Coordinator
 from .db import Database, packed, uid
 from .github_connect import GitHubConnect
@@ -59,6 +60,7 @@ class Core:
         self.updates = Updates(self.db)
         self.coordinator = Coordinator(self)
         self.provider_login = ProviderLogin(self)
+        self.telegram = Telegram(self)
         self.running_actions = {}
         self.service_client = None
         self.recent_results = RecentResults()
@@ -641,22 +643,7 @@ class Core:
                     )
                 if needs:
                     db.execute("UPDATE tasks SET status='waiting' WHERE id=?", (task_id,))
-                    if task["source"].startswith("telegram:"):
-                        db.execute(
-                            "INSERT INTO outbox VALUES (?,?,?,'pending',?,?,NULL)",
-                            (
-                                uid(),
-                                "telegram",
-                                packed(
-                                    {
-                                        "text": f"ShinBot needs your decision for {tool}. Open {self.config.origin}",
-                                        "chat_id": task["source"].split(":", 1)[1],
-                                    }
-                                ),
-                                time.time(),
-                                task_id,
-                            ),
-                        )
+                    self.telegram.request_approval(db, task, action_id)
             row = dict(db.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone())
             if row["status"] in {"pending", "approved"} and row["expires"] < time.time():
                 db.execute(

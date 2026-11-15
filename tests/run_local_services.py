@@ -97,7 +97,6 @@ with tempfile.TemporaryDirectory(prefix="shinbot-local-") as temporary:
         SHINBOT_SERVICE_TOKEN=tokens["runtime"],
         SHINBOT_COMPUTER_TOKEN=tokens["computer"],
         SHINBOT_BROWSER_TOKEN=tokens["browser"],
-        SHINBOT_CHANNEL_TOKEN=tokens["channel"],
         PYTHONDONTWRITEBYTECODE="1",
     )
     processes = {}

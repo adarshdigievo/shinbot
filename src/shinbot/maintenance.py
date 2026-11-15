@@ -22,8 +22,7 @@ from packaging.version import Version
 from . import __version__
 from .volume_admin import VOLUMES, validate_archive
 
-SERVICES = ("control", "runtime", "computer", "browser", "telegram")
-CORE = SERVICES[:4]
+SERVICES = CORE = ("control", "runtime", "computer", "browser")
 _ACTIVE_LOCK = None
 
 
@@ -85,9 +84,7 @@ def compose_document(path, configuration):
 
 def configuration(path=None):
     cli = launcher()
-    result = cli.compose(
-        "--profile", "telegram", "config", "--format", "json", capture=True, configuration=path
-    )
+    result = cli.compose("config", "--format", "json", capture=True, configuration=path)
     # Compose emits dollars escaped for reuse as another Compose input, even in JSON.
     # Keep the in-memory snapshot literal; compose_document escapes it exactly once.
     return json.loads(result.stdout.replace("$$", "$"))
@@ -96,7 +93,7 @@ def configuration(path=None):
 def stop_writers():
     cli = launcher()
     available = configuration()["services"]
-    cli.compose("--profile", "telegram", "stop", "-t", "30", *[s for s in SERVICES if s in available])
+    cli.compose("stop", "-t", "30", *[s for s in SERVICES if s in available])
 
 
 def live_release():
@@ -105,7 +102,7 @@ def live_release():
     for service in SERVICES:
         if service not in config["services"]:
             continue
-        result = cli.compose("--profile", "telegram", "ps", "-aq", service, capture=True)
+        result = cli.compose("ps", "-aq", service, capture=True)
         ids = result.stdout.split()
         if not ids:
             if service in CORE:
@@ -219,7 +216,7 @@ def backup(destination):
             archive_backup(destination, release)
         finally:
             if running:
-                cli.compose("--profile", "telegram", "start", *running)
+                cli.compose("start", *running)
     typer.echo(
         f"Saved {destination}. Includes settings, plugins, conversations, files and credentials. Keep it private."
     )
@@ -237,7 +234,7 @@ def restore(source):
             archive_backup(previous, release)
         except BaseException:
             if running:
-                cli.compose("--profile", "telegram", "start", *running)
+                cli.compose("start", *running)
             raise
         try:
             cli.volume_operation("restore", volumes)
@@ -267,7 +264,7 @@ def restore(source):
                 compose_document(cli.home() / "rollback-compose.json", config)
             (cli.home() / "client.json").unlink(missing_ok=True)
             if running:
-                cli.compose("--profile", "telegram", "up", "-d", "--no-build", "--pull", "never", *running)
+                cli.compose("up", "-d", "--no-build", "--pull", "never", *running)
             write_json(cli.home() / "release.json", release)
             (cli.home() / "recovery.json").unlink(missing_ok=True)
         except BaseException:
@@ -322,9 +319,7 @@ def rollback_saved(state, timeout):
         cli.volume_operation("restore", volumes)
         (cli.home() / "client.json").unlink(missing_ok=True)
         if state["running"]:
-            cli.compose(
-                "--profile", "telegram", "up", "-d", "--no-build", "--pull", "never", *state["running"]
-            )
+            cli.compose("up", "-d", "--no-build", "--pull", "never", *state["running"])
         if set(CORE) <= set(state["running"]):
             healthy(timeout)
         write_json(cli.home() / "release.json", state["release"])
@@ -352,8 +347,6 @@ def update(build=False, timeout=120):
         # Download/build first. A failed download leaves the current services untouched.
         try:
             cli.compose(
-                "--profile",
-                "telegram",
                 *(["build"] if build else ["pull", "--policy", "missing"]),
                 *running,
                 configuration=cli.compose_file(),
@@ -380,22 +373,22 @@ def update(build=False, timeout=120):
         try:
             archive_backup(checkpoint, release)
         except BaseException:
-            cli.compose("--profile", "telegram", "start", *running)
+            cli.compose("start", *running)
             raise
         state = {"pending": True, "backup": str(checkpoint), "release": release, "running": running}
         try:
             write_json(cli.home() / "recovery.json", state)
         except BaseException:
-            cli.compose("--profile", "telegram", "start", *running)
+            cli.compose("start", *running)
             raise
         try:
             held = copy.deepcopy(candidate)
             held["services"]["control"]["environment"]["SHINBOT_SAFE_MODE"] = "1"
             compose_document(cli.home() / "rollback-compose.json", held)
-            cli.compose("--profile", "telegram", "up", "-d", "--no-build", "--pull", "never", *running)
+            cli.compose("up", "-d", "--no-build", "--pull", "never", *running)
             healthy(timeout)
             compose_document(cli.home() / "rollback-compose.json", candidate)
-            cli.compose("--profile", "telegram", "up", "-d", "--no-build", "--pull", "never", *running)
+            cli.compose("up", "-d", "--no-build", "--pull", "never", *running)
             healthy(timeout)
             result = live_release()
             write_json(cli.home() / "release.json", result)
@@ -435,6 +428,7 @@ def launcher_upgrade(version):
         )
     uv = shutil.which("uv")
     prefix = Path(sys.prefix)
+            cli.retire_telegram_service(cli.docker())
     environment = {
         key: value
         for key, value in os.environ.items()
@@ -565,7 +559,7 @@ def rollback(timeout=120):
                 typer.echo(f"Saved current data: {previous}")
             except BaseException:
                 if running:
-                    cli.compose("--profile", "telegram", "start", *running)
+                    cli.compose("start", *running)
                 raise
         state["pending"] = True
         write_json(cli.home() / "recovery.json", state)

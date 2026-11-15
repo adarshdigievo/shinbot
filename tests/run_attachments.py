@@ -71,7 +71,6 @@ def main():
             SHINBOT_SERVICE_TOKEN=tokens["runtime"],
             SHINBOT_COMPUTER_TOKEN=tokens["computer"],
             SHINBOT_BROWSER_TOKEN=tokens["browser"],
-            SHINBOT_CHANNEL_TOKEN=tokens["channel"],
         )
         processes, logs = {}, []
 

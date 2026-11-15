@@ -5,9 +5,7 @@ import time
 
 import httpx
 
-from .channels import telegram_owner
-from .db import packed, uid
-from .hooks import HookBlocked
+from .channels import enqueue
 
 log = logging.getLogger(__name__)
 
@@ -319,18 +317,21 @@ class Coordinator:
                         recipient = (
                             task["source"].split(":", 1)[1]
                             if task["source"].startswith("telegram:")
-                            else telegram_owner()
+                            else self.core.telegram.owner()
                         )
                         if send and recipient:
-                            sql.execute(
-                                "INSERT INTO outbox VALUES (?,?,?,'pending',?,?,NULL)",
-                                (
-                                    uid(),
-                                    "telegram",
-                                    packed({"text": answer or error or status, "chat_id": recipient}),
-                                    time.time(),
-                                    row["task_id"],
-                                ),
+                            files = sql.execute(
+                                "SELECT f.id FROM attachments f JOIN actions a ON a.id=f.action_id "
+                                "WHERE f.task_id=? AND a.status='completed' AND f.created>=? ORDER BY f.created,f.id",
+                                (row["task_id"], row["created"]),
+                            ).fetchall()
+                            enqueue(
+                                sql,
+                                answer or error or status,
+                                recipient,
+                                row["task_id"],
+                                markdown=True,
+                                attachments=[file["id"] for file in files],
                             )
 
             if not result.get("active"):

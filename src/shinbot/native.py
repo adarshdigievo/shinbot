@@ -32,7 +32,7 @@ def configuration():
     config = json.loads(path.read_text())
     if config.get("computer_consent") != "macos-account" and not config.get("desktop", {}).get("enabled"):
         raise ValueError("Native Computer needs the owner's explicit consent to use their macOS account.")
-    for name in ("runtime", "computer", "browser", "channel"):
+    for name in ("runtime", "computer", "browser"):
         if len(config["tokens"].get(name, "")) < 32:
             raise ValueError("The native service credentials are incomplete.")
     for name in ("python", "node"):
@@ -61,7 +61,6 @@ def service_environment(root, config):
         SHINBOT_SERVICE_TOKEN=tokens["runtime"],
         SHINBOT_COMPUTER_TOKEN=tokens["computer"],
         SHINBOT_BROWSER_TOKEN=tokens["browser"],
-        SHINBOT_CHANNEL_TOKEN=tokens["channel"],
         SHINBOT_NATIVE_EXECUTION="1",
         SHINBOT_INSTALLATION="native",
         SHINBOT_BROWSER_VIEW="native",
@@ -84,8 +83,6 @@ def service_environment(root, config):
 def command(name, config):
     if name == "desktop":
         return [config["python"], "-m", "shinbot.desktop_host"]
-    if name == "telegram":
-        return [config["python"], "-m", "shinbot.services.telegram"]
     if name == "runtime":
         return [config["node"], str(Path(config["runtime_dir"]) / "dist/server.js")]
     module = "shinbot.app:create_app" if name == "control" else f"shinbot.services.{name}:app"
@@ -111,12 +108,15 @@ def child_environment(name, root, config):
         env.update(PORT=str(config["ports"][name]), HOST="127.0.0.1")
     if name in {"computer", "browser"}:
         env["SHINBOT_EXECUTOR_TOKEN"] = config["tokens"][name]
+    # As in the container deployment, a service holds only the credentials it uses.
+    needed = {"control": {"SERVICE", "COMPUTER", "BROWSER"}, "runtime": {"SERVICE"}}
+    if name != "desktop":
+        for key in {"SERVICE", "COMPUTER", "BROWSER"} - needed.get(name, set()):
+            env.pop(f"SHINBOT_{key}_TOKEN", None)
     telegram = config.get("telegram", {})
-    if telegram.get("enabled"):
-        if name in {"control", "telegram"}:
-            env["TELEGRAM_OWNER_ID"] = str(telegram["owner_id"])
-        if name == "telegram":
-            env["TELEGRAM_BOT_TOKEN"] = telegram["bot_token"]
+    if name == "control" and telegram.get("enabled"):
+        # Read once by the gateway to carry over a connector that was set up with the old command.
+        env.update(TELEGRAM_OWNER_ID=str(telegram["owner_id"]), TELEGRAM_BOT_TOKEN=telegram["bot_token"])
     return env
 
 
@@ -128,8 +128,6 @@ def supervise():
     services = ["runtime", "computer", "browser", "control"]
     if config.get("desktop", {}).get("enabled"):
         services = ["runtime", "desktop", "control"]
-    if config.get("telegram", {}).get("enabled"):
-        services.append("telegram")
     logs = root / "logs"
     logs.mkdir(mode=0o700, exist_ok=True)
     stopping = False
@@ -165,7 +163,11 @@ def supervise():
                 if time.monotonic() < retries.get(name, 0):
                     continue
                 if name not in streams:
-                    streams[name] = (logs / f"{name}.log").open("ab", buffering=0)
+                    log = logs / f"{name}.log"
+                    # Keep one previous file so logs cannot grow without bound.
+                    if log.exists() and log.stat().st_size > 10_000_000:
+                        log.replace(log.with_suffix(".log.1"))
+                    streams[name] = log.open("ab", buffering=0)
                 if name == "desktop":
                     (root / "desktop-endpoints.json").unlink(missing_ok=True)
                 children[name] = subprocess.Popen(
@@ -181,7 +183,7 @@ def supervise():
             time.sleep(0.5)
     finally:
         # Stop intake before the services that carry out its actions.
-        for name in ("telegram", "control", "runtime", "computer", "browser", "desktop"):
+        for name in ("control", "runtime", "computer", "browser", "desktop"):
             process = children.get(name)
             if process is not None and process.poll() is None:
                 process.terminate()
@@ -284,15 +286,6 @@ def status():
                 result["services"][name] = "healthy" if response.is_success else "unavailable"
             except httpx.HTTPError:
                 result["services"][name] = "stopped"
-    if config.get("telegram", {}).get("enabled"):
-        result["services"]["telegram"] = "stopped"
-        try:
-            pid = json.loads((root / "processes.json").read_text()).get("telegram")
-            if pid:
-                os.kill(pid, 0)
-                result["services"]["telegram"] = "running"
-        except (OSError, ValueError):
-            pass
     typer.echo(json.dumps(result, indent=2))
 
 
@@ -469,48 +462,20 @@ def desktop_disable():
     typer.echo(f"Native execution restored. Desktop backup: {backup}.")
 
 
-@app.command()
+@app.command(hidden=True)
 def telegram_setup():
-    """Connect a private Telegram chat to the native installation."""
+    """Telegram is now connected from the web app."""
     from . import cli
 
-    root, config = configuration()
-    token, owner, username = cli.telegram_credentials()
-    # Scan with this installation's data and interpreter before saving any credentials.
-    try:
-        subprocess.run(
-            [config["python"], "-c", "import telegram\n" + cli.TELEGRAM_SCAN],
-            env=service_environment(root, config),
-            cwd=root,
-            check=True,
-            capture_output=True,
-            timeout=90,
-        )
-    except (OSError, subprocess.SubprocessError):
-        raise typer.BadParameter(
-            "Telegram dependency or security checks failed. Check the native Python environment "
-            "has ShinBot's telegram and security extras. Settings were not changed."
-        ) from None
-    config["telegram"] = {"enabled": True, "bot_token": token, "owner_id": owner}
-    cli.write_private(root / "config.json", json.dumps(config, indent=2) + "\n")
-    stop()
-    start()
-    typer.echo(f"Telegram enabled. Open https://t.me/{username} and send /start, then /bots.")
+    cli.telegram_moved()
 
 
-@app.command()
+@app.command(hidden=True)
 def telegram_stop():
-    """Stop native Telegram while preserving its settings and conversations."""
+    """Telegram is now disabled from the web app."""
     from . import cli
 
-    root, config = configuration()
-    telegram = config.get("telegram", {})
-    if telegram.get("enabled"):
-        telegram["enabled"] = False
-        cli.write_private(root / "config.json", json.dumps(config, indent=2) + "\n")
-        stop()
-        start()
-    typer.echo("Telegram stopped. Run shinbot native telegram-setup to reconnect.")
+    cli.telegram_moved()
 
 
 if __name__ == "__main__":

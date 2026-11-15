@@ -2,18 +2,32 @@
   "schema_version": 1,
   "id": "telegram",
   "name": "Telegram",
-  "version": "1.1.0",
-  "description": "Chat privately with your ShinBot profiles, switch bots with /bot, and receive complete replies and job results.",
+  "version": "2.0.0",
+  "description": "Chat with your bots from a private Telegram chat. Approve actions with a tap, get files and job results, and switch bots with /bots.",
   "kind": "channel",
   "license": "MIT",
   "files": [
-    "LICENSE",
-    "telegram.py"
+    "LICENSE"
   ],
   "permissions": [
     "telegram-account",
     "task-messages",
     "job-notifications"
   ],
-  "entrypoint": "telegram.py"
+  "configuration": [
+    {
+      "key": "SHINBOT_PLUGIN_TELEGRAM_BOT_TOKEN",
+      "label": "Bot token",
+      "description": "In Telegram, message @BotFather, send /newbot and follow the steps. Paste the token it gives you. Use a bot that no other program is connected to.",
+      "secret": true,
+      "required": true
+    },
+    {
+      "key": "SHINBOT_PLUGIN_TELEGRAM_OWNER_ID",
+      "label": "Your Telegram user ID",
+      "description": "Only this account can talk to your bot. If you don’t know your ID, leave this empty, enable the plugin and send your bot any message: it replies with the number to enter here.",
+      "secret": false,
+      "required": false
+    }
+  ]
 }

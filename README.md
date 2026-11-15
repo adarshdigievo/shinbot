@@ -77,7 +77,7 @@ Add sidebar apps, themes, chat and tool hooks, MCP servers, skills or bot templa
 
 The optional [Projects plugin](https://adarshdigievo.github.io/shinbot/docs/user-guide/plugins.html#coding-projects-and-parallel-tasks) adds a GitHub attention inbox, issue-linked bot conversations and reminders, repository browsing, parallel worktrees and bot delegation. The optional Calendar plugin connects Google Calendar with read-only access and shows events alongside scheduled bot work. Manage encrypted integration and plugin credentials through Settings → Secrets. The [Kanban plugin](https://adarshdigievo.github.io/shinbot/docs/user-guide/plugins.html#kanban-board) adds a board for work that needs several runs.
 
-The official Telegram plugin adds a private chat connection. Follow its [setup guide](https://adarshdigievo.github.io/shinbot/docs/user-guide/telegram.html) when you want to use it.
+The official Telegram plugin lets you chat with your bots, approve actions and receive files from a private Telegram chat. Connect it in **Plugins**; see its [guide](https://adarshdigievo.github.io/shinbot/docs/user-guide/telegram.html).
 
 ## Contribute
 
@@ -98,4 +98,4 @@ GitHub Actions checks Python, the runtime, browser journeys, container integrati
 
 ## Licenses
 
-ShinBot is MIT-licensed. Application dependencies primarily use permissive licenses. Reviewed exceptions include noVNC and certifi under MPL-2.0, and the optional Telegram library under LGPL-3.0. Dependencies are distributed unchanged with their notices. Platform components, including Linux, Chromium and TigerVNC, have separate licenses. See the [license guide](https://adarshdigievo.github.io/shinbot/docs/reference/licenses.html) for the application, documentation and platform inventories.
+ShinBot is MIT-licensed. Application dependencies primarily use permissive licenses. Reviewed exceptions include noVNC and certifi under MPL-2.0. Dependencies are distributed unchanged with their notices. Platform components, including Linux, Chromium and TigerVNC, have separate licenses. See the [license guide](https://adarshdigievo.github.io/shinbot/docs/reference/licenses.html) for the application, documentation and platform inventories.

@@ -15,7 +15,7 @@ ShinBot adds a personal-assistant application around Pi Durable: a place to talk
 | Computer | Workspace files, commands, executable plugins and browser interaction | Python worker, MCP, Playwright, Chromium, Xvfb, TigerVNC and noVNC |
 | Notebook | Editable pages, explicitly saved memories, search and exports | SQLite FTS5 and Markdown |
 | Jobs | Scheduled tasks and run history | Python coordinator, croniter and SQLite |
-| Plugins | Skills, MCP tools and optional channels from repository catalogs | Versioned manifests, content hashes and separate processes |
+| Plugins | Skills, MCP tools and optional channels from repository catalogs | Versioned manifests, content hashes and separate processes; the Telegram channel runs inside the gateway |
 
 SQLite stores application state. Pi Durable and Chord keep the agent's execution state. ShinBot integrates published packages through their public APIs.
 
@@ -68,7 +68,7 @@ The gateway caches public GitHub and PyPI release metadata in SQLite. Automatic 
 | `src/shinbot/tasks.py`, `jobs.py`, `db.py` | Task lifecycle, scheduling and storage |
 | `src/shinbot/bots.py`, `notebook.py`, `plugins.py` | Profiles, notes, memories and extension catalogs |
 | `src/shinbot/sources.py`, `learning.py` | Source inspection, portable adapters and evidence-backed skill proposals |
-| `src/shinbot/services/` | Computer, browser and channel services |
+| `src/shinbot/services/` | Computer and browser services |
 | `src/shinbot/web/` | Packaged web application and vendored assets |
 | `src/shinbot/cli.py` | Installation, local deployment and CLI |
 | `runtime/src/` | Pi adapter and provider authentication |

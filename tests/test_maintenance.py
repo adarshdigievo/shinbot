@@ -88,7 +88,7 @@ def test_backup_failure_restarts_only_previously_running_services(installation, 
     monkeypatch.setattr(cli, "volume_operation", lambda *a, **kw: (_ for _ in ()).throw(OSError("disk full")))
     with pytest.raises(OSError):
         maintenance.backup(tmp_path / "backup.tar.gz")
-    assert installation[0][-1] == ("compose", ("--profile", "telegram", "start", *maintenance.CORE))
+    assert installation[0][-1] == ("compose", ("start", *maintenance.CORE))
     assert not (tmp_path / "backup.tar.gz").exists()
 
 
@@ -231,7 +231,7 @@ def test_update_checkpoint_write_failure_restarts_original_containers(installati
     monkeypatch.setattr(maintenance, "write_json", full_disk)
     with pytest.raises(OSError, match="disk full"):
         maintenance.update()
-    assert installation[0][-1] == ("compose", ("--profile", "telegram", "start", *maintenance.CORE))
+    assert installation[0][-1] == ("compose", ("start", *maintenance.CORE))
     assert not (cli.home() / "rollback-compose.json").exists()
 
 

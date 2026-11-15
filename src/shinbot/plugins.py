@@ -136,7 +136,8 @@ def validate_package(files):
         raise ValueError("Include the plugin's LICENSE file.")
     if manifest.kind == "skill" and "SKILL.md" not in files:
         raise ValueError("A skill needs SKILL.md.")
-    if manifest.kind == "builtin":
+    if manifest.kind in {"builtin", "channel"}:
+        # These run inside ShinBot itself, so only the shipped packages may claim them.
         root = Path(__file__).parent / "bundled" / "official" / "plugins"
         directory = next(
             (
@@ -147,7 +148,7 @@ def validate_package(files):
             ),
             root / "missing",
         )
-        if manifest.id not in {"kanban", "projects", "calendar"} or not directory.is_dir():
+        if manifest.id not in {"kanban", "projects", "calendar", "telegram"} or not directory.is_dir():
             raise ValueError("Only bundled official toolkits can use native services.")
         canonical = {
             str(p.relative_to(directory)): p.read_bytes() for p in directory.rglob("*") if p.is_file()
@@ -268,7 +269,7 @@ class Plugins:
         if bundled.exists() and (official["revision"] is None or official["revision"].startswith("bundled-")):
             self.add_catalog(
                 OFFICIAL,
-                "bundled-0.1.0a1-research1",
+                "bundled-0.1.0a2-telegram2",
                 {
                     str(p.relative_to(bundled)): p.read_bytes()
                     for p in bundled.rglob("*")
@@ -277,6 +278,8 @@ class Plugins:
             )
 
     async def repository(self, source, ref="HEAD"):
+        # Telegram 1.x needed a separate host service that no longer exists.
+        self.db.execute("DELETE FROM plugins WHERE id='telegram' AND version LIKE '1.%'")
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", source):
             raise ValueError("Use a GitHub repository in owner/repository form.")
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", ref):
@@ -512,7 +515,9 @@ class Plugins:
         return [
             f"plugin:{r['id']}:{r['version']}"
             for r in self.db.all("SELECT * FROM plugins WHERE status='active'")
-            if self.allowed(r["id"], bot_id) and not self.public(r)["missing_configuration"]
+            if self.allowed(r["id"], bot_id)
+            and json.loads(r["manifest"])["kind"] != "channel"
+            and not self.public(r)["missing_configuration"]
         ]
 
     def access(self, plugin):
@@ -606,8 +611,6 @@ class Plugins:
     def activate(self, plugin, version):
         row, files = self.package(plugin, version)
         Security(self.db).require(files)
-        if json.loads(row["manifest"])["kind"] == "channel":
-            raise ValueError("Enable this channel with its host service and account setup.")
         self.configuration(plugin, version, environment=True)
         with self.db.transaction() as db:
             db.execute("UPDATE plugins SET status='draining' WHERE id=? AND status='active'", (plugin,))
@@ -615,9 +618,4 @@ class Plugins:
         self.db.event("plugin", f"Activated {plugin} {version}")
 
     def disable(self, plugin):
-        row = self.db.one("SELECT manifest FROM plugins WHERE id=? LIMIT 1", (plugin,))
-        if row and json.loads(row["manifest"])["kind"] == "channel":
-            raise ValueError(
-                "Stop this channel's host service instead. For Telegram, run shinbot telegram-stop."
-            )
         self.db.execute("UPDATE plugins SET status='disabled' WHERE id=?", (plugin,))

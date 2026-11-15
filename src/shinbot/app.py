@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from . import __version__
+from . import __version__, retention, telegram
 from .auth import digest, hash_password, require_service, verify_password
 from .bots import BOT_COLORS
 from .chat_options import ApprovalMode, ChatOptions, ThinkingLevel
@@ -87,15 +87,21 @@ def create_app(config: Config | None = None):
         worker = asyncio.create_task(core.coordinator.run()) if config.coordinate else None
         releases = asyncio.create_task(core.updates.run()) if config.coordinate else None
         yield
-        if releases:
-            releases.cancel()
-            with suppress(asyncio.CancelledError):
-                await releases
+        if channel:
+            channel.cancel()
+            await asyncio.gather(channel, return_exceptions=True)
+        for background in (cleanup, releases):
+            if background:
+                background.cancel()
+                with suppress(asyncio.CancelledError):
+                    await background
         if worker:
             worker.cancel()
             with suppress(asyncio.CancelledError):
                 await worker
         for task in list(core.running_actions.values()):
+        cleanup = asyncio.create_task(retention.run(core.db)) if config.coordinate else None
+        channel = asyncio.create_task(telegram.run(core)) if config.coordinate else None
             task.cancel()
         await asyncio.gather(*list(core.running_actions.values()), return_exceptions=True)
         await core.close()
@@ -939,7 +945,11 @@ def create_app(config: Config | None = None):
 
     @api.get("/plugins")
     async def plugins():
-        return {"installed": core.plugins.list(), "marketplaces": core.plugins.catalog()}
+        installed = core.plugins.list()
+        for plugin in installed:
+            if plugin["kind"] == "channel" and plugin["status"] == "active":
+                plugin["connection"] = core.telegram.connection()
+        return {"installed": installed, "marketplaces": core.plugins.catalog()}
 
     @api.get("/plugin-ui/{bot_id}/{plugin_id}/{version}/assets/{path:path}")
     def plugin_ui_asset(bot_id: str, plugin_id: str, version: str, path: str):
@@ -1180,9 +1190,6 @@ def create_app(config: Config | None = None):
         return await core.remote("browser", f"/{operation}", data)
 
     app.include_router(api)
-    from .channels import channel_router
-
-    app.include_router(channel_router(core))
 
     @app.websocket("/api/browser/vnc")
     async def browser_socket(socket: WebSocket):

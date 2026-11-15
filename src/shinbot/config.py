@@ -22,7 +22,6 @@ class Config:
     service_token: str = field(default_factory=lambda: os.getenv("SHINBOT_SERVICE_TOKEN", ""))
     computer_token: str = field(default_factory=lambda: os.getenv("SHINBOT_COMPUTER_TOKEN", ""))
     browser_token: str = field(default_factory=lambda: os.getenv("SHINBOT_BROWSER_TOKEN", ""))
-    channel_token: str = field(default_factory=lambda: os.getenv("SHINBOT_CHANNEL_TOKEN", ""))
     safe_mode: bool = field(default_factory=lambda: os.getenv("SHINBOT_SAFE_MODE", "0") == "1")
     coordinate: bool = True
 

@@ -74,12 +74,7 @@ The marketplace command accepts `--ref` when a specific repository ref is needed
 
 ### Optional Telegram plugin
 
-Use these commands to set up or stop the [official Telegram plugin](../user-guide/telegram.html):
-
-```sh
-shinbot telegram-setup
-shinbot telegram-stop
-```
+The [official Telegram plugin](../user-guide/telegram.html) is connected, changed and disabled in the web app under **Plugins**. It has no host commands. `shinbot telegram-setup` and `shinbot telegram-stop` from earlier releases remain only to point there.
 
 ## MCP connections and skills
 

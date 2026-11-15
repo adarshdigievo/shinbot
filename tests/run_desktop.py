@@ -208,7 +208,6 @@ def main():
             SHINBOT_COMPUTER_TOKEN=tokens["computer"],
             SHINBOT_BROWSER_TOKEN=tokens["browser"],
             SHINBOT_SERVICE_TOKEN=tokens["runtime"],
-            SHINBOT_CHANNEL_TOKEN=tokens["channel"],
         )
         runtime_log = (OUT / "runtime.log").open("w")
         runtime_process = subprocess.Popen(

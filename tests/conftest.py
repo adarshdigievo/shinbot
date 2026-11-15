@@ -61,7 +61,6 @@ def application(tmp_path):
             service_token="r" * 40,
             computer_token="c" * 40,
             browser_token="b" * 40,
-            channel_token="t" * 40,
         )
     )
 

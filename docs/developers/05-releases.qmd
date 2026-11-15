@@ -70,7 +70,7 @@ Review dependency/license changes, run CI and the site build, then commit the ve
 
 ## Published artifacts
 
-Every release produces a Python wheel and source archive, four core Docker images, and images for desktop mode and the optional Telegram plugin:
+Every release produces a Python wheel and source archive, four core Docker images, and an image for desktop mode:
 
 ```text
 adarshd96/shinbot:VERSION-control
@@ -78,7 +78,6 @@ adarshd96/shinbot:VERSION-runtime
 adarshd96/shinbot:VERSION-computer
 adarshd96/shinbot:VERSION-browser
 adarshd96/shinbot:VERSION-desktop
-adarshd96/shinbot:VERSION-telegram
 ```
 
 Images are built for `linux/amd64` and `linux/arm64`, with build provenance and SBOM attestations. Container journeys run on the Linux CI host; cross-platform image builds do not replace native runtime testing on every architecture.
@@ -89,7 +88,7 @@ After successful image and PyPI publishing, the release workflow syncs the main 
 
 The **Docker Hub metadata** workflow can also run on a tag permitted by the `dockerhub` environment, without building images, running CI, or publishing a package. Its optional cache migration copies the six legacy `buildcache-*` tags to the cache repository and compares the manifests. Cleanup is a separate option and removes source tags only after all copies pass verification. Only the metadata step receives `DOCKERHUB_METADATA_TOKEN`; image builds and cache copies use the separate Read & Write token.
 
-After PyPI publishing, a serialized promotion job checks the current latest release before updating `latest-control`, `latest-runtime`, `latest-computer`, `latest-browser`, `latest-desktop` and `latest-telegram`. Prereleases keep versioned tags. The launcher uses the exact image set bundled with its package, never the mutable `latest-*` aliases.
+After PyPI publishing, a serialized promotion job checks the current latest release before updating `latest-control`, `latest-runtime`, `latest-computer`, `latest-browser` and `latest-desktop`. Prereleases keep versioned tags. The launcher uses the exact image set bundled with its package, never the mutable `latest-*` aliases.
 
 PyPI publishing waits for all image builds and pushes, so a newly installable package has its matching containers. Package attestations are produced by the PyPI publishing action.
 

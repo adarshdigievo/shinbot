@@ -89,81 +89,44 @@ def test_login_uses_saved_installation_address_unless_overridden(monkeypatch, tm
     }
 
 
-def test_telegram_setup_checks_token_and_preserves_settings_on_failure(monkeypatch, tmp_path):
+def test_old_telegram_commands_point_to_the_app(monkeypatch, tmp_path):
     monkeypatch.setenv("SHINBOT_HOME", str(tmp_path))
     path = tmp_path / "deploy.env"
     path.write_text("SHINBOT_ORIGIN=http://localhost:8765\n")
     before = path.read_text()
     calls = []
-    monkeypatch.setattr(cli, "compose", lambda *args: calls.append(args))
-    original = httpx.Client
-    monkeypatch.setattr(
-        cli.httpx,
-        "Client",
-        lambda **kwargs: original(
-            transport=httpx.MockTransport(lambda request: httpx.Response(401, json={"ok": False})), **kwargs
-        ),
-    )
-    token = "12345:" + "x" * 35
-    result = CliRunner().invoke(cli.app, ["telegram-setup"], input=token + "\n123456\n")
-    assert result.exit_code != 0 and "rejected" in result.output
-    assert token not in result.output and path.read_text() == before and calls == []
+    monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: calls.append(args))
+    for command in (["telegram-setup"], ["telegram-stop"], ["native", "telegram-setup"]):
+        result = CliRunner().invoke(cli.app, command)
+        assert result.exit_code == 0 and "Plugins → Telegram" in result.output
+    assert calls == []
+    assert "telegram" not in CliRunner().invoke(cli.app, ["--help"]).output.lower()
 
 
-@pytest.mark.parametrize("after_rollback", [False, True])
-def test_telegram_setup_writes_private_configuration_and_prints_link(monkeypatch, tmp_path, after_rollback):
-    monkeypatch.setattr(cli.maintenance, "remember_release", lambda: None)
+def test_start_retires_the_old_telegram_container(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
     monkeypatch.setenv("SHINBOT_HOME", str(tmp_path))
-    restored = tmp_path / "rollback-compose.json"
-    if after_rollback:
-        restored.write_text(
-            json.dumps(
-                {
-                    "services": {
-                        "control": {"environment": {"LITERAL": "keep$$literal"}},
-                        "telegram": {"environment": {"TELEGRAM_BOT_TOKEN": "old"}},
-                    }
-                }
-            )
-        )
-    path = tmp_path / "deploy.env"
-    path.write_text("SHINBOT_ORIGIN=http://localhost:8765\n")
-    calls = []
-    monkeypatch.setattr(cli, "compose", lambda *args: calls.append(args))
-    original = httpx.Client
+    cli.write_private(tmp_path / "deploy.env", "SHINBOT_PROJECT=demo\n")
+    commands = []
 
-    def handler(request):
-        return httpx.Response(
-            200,
-            json={
-                "ok": True,
-                "result": {"username": "test_shinbot"} if request.url.path.endswith("getMe") else {"url": ""},
-            },
-        )
+    def run(command, **kwargs):
+        commands.append(command)
+        return SimpleNamespace(returncode=0, stdout="abc123\n" if "ps" in command else "")
 
-    monkeypatch.setattr(
-        cli.httpx, "Client", lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs)
-    )
-    token = "12345:" + "x" * 35
-    result = CliRunner().invoke(cli.app, ["telegram-setup", "--build"], input=token + "\n123456\n")
-    assert result.exit_code == 0, result.output
-    assert token not in result.output and "https://t.me/test_shinbot" in result.output
-    assert path.stat().st_mode & 0o777 == 0o600
-    assert "TELEGRAM_OWNER_ID=123456" in path.read_text()
-    if after_rollback:
-        services = json.loads(restored.read_text())["services"]
-        assert services["telegram"]["environment"]["TELEGRAM_BOT_TOKEN"] == token
-        assert services["control"]["environment"]["TELEGRAM_OWNER_ID"] == "123456"
-        assert services["control"]["environment"]["LITERAL"] == "keep$$literal"
-    assert calls == [
-        ("exec", "-T", "control", "python", "-c", cli.TELEGRAM_SCAN),
-        ("--profile", "telegram", "up", "-d", "--build", "control", "telegram"),
+    monkeypatch.setattr(cli.subprocess, "run", run)
+    cli.retire_telegram_service(["docker", "--context", "default"])
+    assert commands[0][-4:] == [
+        "--filter",
+        "label=com.docker.compose.project=demo",
+        "--filter",
+        "label=com.docker.compose.service=telegram",
     ]
 
 
 @pytest.mark.parametrize("operation", ["backup", "restore"])
-@pytest.mark.parametrize("telegram_running", [False, True])
-def test_backup_restore_preserve_stopped_telegram(monkeypatch, tmp_path, operation, telegram_running):
+@pytest.mark.parametrize("partly_stopped", [False, True])
+def test_backup_restore_restart_only_what_was_running(monkeypatch, tmp_path, operation, partly_stopped):
     from types import SimpleNamespace
 
     from test_maintenance import volumes
@@ -172,7 +135,7 @@ def test_backup_restore_preserve_stopped_telegram(monkeypatch, tmp_path, operati
     cli.write_private(cli.home() / "deploy.env", "SHINBOT_PROJECT=test\n")
     release = {"version": "test", "configuration": {"services": {}}}
     monkeypatch.setattr(cli.maintenance, "remember_release", lambda: release)
-    running = ["control", "runtime", "computer", "browser"] + (["telegram"] if telegram_running else [])
+    running = ["control", "runtime", "computer"] + ([] if partly_stopped else ["browser"])
     calls = []
 
     def compose(*args, **kwargs):
@@ -198,6 +161,21 @@ def test_backup_restore_preserve_stopped_telegram(monkeypatch, tmp_path, operati
     result = CliRunner().invoke(cli.app, args)
     assert result.exit_code == 0, result.output
     if operation == "backup":
-        assert calls[-1] == ("--profile", "telegram", "start", *running)
+        assert calls[-1] == ("start", *running)
     else:
-        assert calls[-1] == ("--profile", "telegram", "up", "-d", "--no-build", "--pull", "never", *running)
+        assert calls[-1] == ("up", "-d", "--no-build", "--pull", "never", *running)
+
+
+def test_restore_reports_the_archive_problem_and_accepts_own_large_backups(monkeypatch, tmp_path):
+    seen = []
+
+    def restore(source, trusted=False):
+        seen.append(trusted)
+        if not trusted:
+            raise ValueError("Backup contains 600000 entries; an archive from elsewhere may hold 500000.")
+
+    monkeypatch.setattr(cli.maintenance, "restore", restore)
+    refused = CliRunner().invoke(cli.app, ["restore", str(tmp_path / "big.tar.gz"), "--replace"])
+    assert refused.exit_code != 0 and "600000 entries" in refused.output
+    accepted = CliRunner().invoke(cli.app, ["restore", str(tmp_path / "big.tar.gz"), "--replace", "--trusted"])
+    assert accepted.exit_code == 0 and seen == [False, True]

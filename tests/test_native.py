@@ -1,13 +1,10 @@
 import json
-import subprocess
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import httpx
 import pytest
-from typer.testing import CliRunner
 
-from shinbot import cli, native
+from shinbot import native
 from shinbot.services import computer
 
 
@@ -62,7 +59,7 @@ def native_config(tmp_path, monkeypatch):
         "node": "/test/node",
         "runtime_dir": "/test/runtime",
         "ports": {"control": 8765, "runtime": 8081, "computer": 8082, "browser": 8083},
-        "tokens": {name: name * 40 for name in ("runtime", "computer", "browser", "channel")},
+        "tokens": {name: name * 40 for name in ("runtime", "computer", "browser")},
         "child_path": "/usr/bin",
         "skills_cli": "/test/skills",
     }
@@ -72,7 +69,7 @@ def native_config(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("enabled", [False, True])
-def test_native_supervises_telegram_with_scoped_credentials(native_config, monkeypatch, enabled):
+def test_native_supervises_services_with_scoped_credentials(native_config, monkeypatch, enabled):
     root, config = native_config
     config["telegram"] = {"enabled": enabled, "bot_token": "private-bot-token", "owner_id": "123456"}
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "inherited-secret")
@@ -103,86 +100,31 @@ def test_native_supervises_telegram_with_scoped_credentials(native_config, monke
     monkeypatch.setattr(native.time, "sleep", interrupt)
     with pytest.raises(KeyboardInterrupt):
         native.supervise()
-    assert len(launched) == (5 if enabled else 4)
+    assert [process.args[-1] if "node" in process.args[0] else process.args[3] for process in launched] == [
+        "/test/runtime/dist/server.js",
+        "shinbot.services.computer:app",
+        "shinbot.services.browser:app",
+        "shinbot.app:create_app",
+    ]
+    runtime, computer, browser, control = launched
     for process in launched[:3]:
-        assert "TELEGRAM_BOT_TOKEN" not in process.env
-        assert "TELEGRAM_OWNER_ID" not in process.env
-    assert "TELEGRAM_BOT_TOKEN" not in launched[3].env
+        assert "TELEGRAM_BOT_TOKEN" not in process.env and "TELEGRAM_OWNER_ID" not in process.env
+    # Each service holds only the credentials it uses, as in the container deployment.
+    tokens = ("SHINBOT_SERVICE_TOKEN", "SHINBOT_COMPUTER_TOKEN", "SHINBOT_BROWSER_TOKEN")
+    assert [name for name in tokens if name in runtime.env] == ["SHINBOT_SERVICE_TOKEN"]
+    assert all(name in control.env for name in tokens)
+    for process, name in ((computer, "computer"), (browser, "browser")):
+        assert not [key for key in tokens if key in process.env]
+        assert process.env["SHINBOT_EXECUTOR_TOKEN"] == name * 40
+    assert not [key for process in launched for key in process.env if "CHANNEL" in key]
     if enabled:
-        assert launched[3].env["TELEGRAM_OWNER_ID"] == "123456"
-        assert launched[4].args == ["/test/python", "-m", "shinbot.services.telegram"]
-        assert launched[4].env["TELEGRAM_BOT_TOKEN"] == "private-bot-token"
-        assert launched[4].env["SHINBOT_CONTROL_URL"] == "http://127.0.0.1:8765"
-        assert stopped[:2] == [launched[4], launched[3]]
+        # A connector set up with the old host command is handed to the gateway to adopt.
+        assert control.env["TELEGRAM_OWNER_ID"] == "123456"
+        assert control.env["TELEGRAM_BOT_TOKEN"] == "private-bot-token"
     else:
-        assert "TELEGRAM_OWNER_ID" not in launched[3].env
+        assert "TELEGRAM_OWNER_ID" not in control.env and "TELEGRAM_BOT_TOKEN" not in control.env
+    assert stopped[0] is control
     assert not (root / "processes.json").exists()
-
-
-@pytest.mark.parametrize("failure", [None, "token", "webhook", "scan"])
-def test_native_telegram_setup_checks_before_saving(native_config, monkeypatch, failure):
-    root, config = native_config
-    before = (root / "config.json").read_bytes()
-    calls = []
-    token = "12345:" + "x" * 35
-    original_client = httpx.Client
-
-    def handler(request):
-        if failure == "token":
-            return httpx.Response(401, json={"ok": False})
-        result = (
-            {"username": "test_shinbot"}
-            if request.url.path.endswith("getMe")
-            else {"url": "https://existing.example" if failure == "webhook" else ""}
-        )
-        return httpx.Response(200, json={"ok": True, "result": result})
-
-    monkeypatch.setattr(
-        cli.httpx,
-        "Client",
-        lambda **kwargs: original_client(transport=httpx.MockTransport(handler), **kwargs),
-    )
-
-    def run(args, **kwargs):
-        assert "TELEGRAM_BOT_TOKEN" not in kwargs["env"]
-        assert kwargs["env"]["SHINBOT_DATA"] == str(root / "control-data")
-        assert token not in args
-        calls.append("scan")
-        if failure == "scan":
-            raise subprocess.CalledProcessError(1, args, stderr="private scan output")
-        return SimpleNamespace(returncode=0)
-
-    monkeypatch.setattr(native.subprocess, "run", run)
-    monkeypatch.setattr(native, "stop", lambda: calls.append("stop"))
-    monkeypatch.setattr(native, "start", lambda: calls.append("start"))
-    result = CliRunner().invoke(cli.app, ["native", "telegram-setup"], input=token + "\n123456\n")
-    assert token not in result.output
-    assert "private scan output" not in result.output
-    if failure:
-        assert result.exit_code != 0
-        assert (root / "config.json").read_bytes() == before
-        assert calls == (["scan"] if failure == "scan" else [])
-    else:
-        assert result.exit_code == 0, result.output
-        assert "https://t.me/test_shinbot" in result.output
-        saved = json.loads((root / "config.json").read_text())
-        assert saved["telegram"] == {"enabled": True, "bot_token": token, "owner_id": "123456"}
-        assert saved["tokens"] == config["tokens"]
-        assert (root / "config.json").stat().st_mode & 0o777 == 0o600
-        assert calls == ["scan", "stop", "start"]
-
-
-def test_native_telegram_stop_preserves_credentials(native_config, monkeypatch):
-    root, config = native_config
-    config["telegram"] = {"enabled": True, "bot_token": "saved-secret", "owner_id": "123456"}
-    calls = []
-    monkeypatch.setattr(native, "stop", lambda: calls.append("stop"))
-    monkeypatch.setattr(native, "start", lambda: calls.append("start"))
-    result = CliRunner().invoke(cli.app, ["native", "telegram-stop"])
-    assert result.exit_code == 0, result.output
-    saved = json.loads((root / "config.json").read_text())
-    assert saved["telegram"] == {"enabled": False, "bot_token": "saved-secret", "owner_id": "123456"}
-    assert calls == ["stop", "start"]
 
 
 def test_desktop_enable_restores_previous_configuration_on_failure(native_config, monkeypatch):
