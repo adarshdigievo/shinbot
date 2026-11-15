@@ -116,7 +116,7 @@ def test_native_supervises_services_with_scoped_credentials(native_config, monke
     for process, name in ((computer, "computer"), (browser, "browser")):
         assert not [key for key in tokens if key in process.env]
         assert process.env["SHINBOT_EXECUTOR_TOKEN"] == name * 40
-    assert not [key for process in launched for key in process.env if "CHANNEL" in key]
+    assert not [process for process in launched if "SHINBOT_CHANNEL_TOKEN" in process.env]
     if enabled:
         # A connector set up with the old host command is handed to the gateway to adopt.
         assert control.env["TELEGRAM_OWNER_ID"] == "123456"

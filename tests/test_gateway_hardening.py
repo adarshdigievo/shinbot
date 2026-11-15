@@ -411,7 +411,10 @@ def test_daily_retention_prunes_only_records_nothing_reads(application):
     }
     assert db.all("SELECT request_id FROM task_requests") == [{"request_id": "recent-request"}]
     # Receipts saved before they carried a time start their month at the first pass.
-    assert db.setting(receipt) == {"input_hash": "x", "result": {}, "at": now}
+    # SQLite writes the time with its own float precision, which differs between versions.
+    stamped = db.setting(receipt)
+    assert stamped.pop("at") == pytest.approx(now, abs=0.001)
+    assert stamped == {"input_hash": "x", "result": {}}
     assert db.setting("hook-warning:after_tool:event") == now
     assert db.setting("preferences") == preferences and db.setting("retention_at") == now
     assert len(db.all("SELECT id FROM tasks")) == 4 and len(db.all("SELECT id FROM messages")) == 4
