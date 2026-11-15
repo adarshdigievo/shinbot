@@ -196,10 +196,13 @@ def prune_restore_points(keep=5):
             capture_output=True,
             text=True,
         )
+        # Exact repositories only: another installation's project name may begin with this one's.
+        repositories = {prefix + service for service in (*SERVICES, "telegram")}
         for tag in listed.stdout.split():
+            repository, _, checkpoint = tag.rpartition(":")
             # A tag carries its checkpoint's filename without the final suffix. Docker refuses to
             # delete an image a container still uses, so only unneeded old releases free space.
-            if tag.startswith(prefix) and tag.rsplit(":", 1)[-1] + ".gz" not in kept:
+            if repository in repositories and checkpoint + ".gz" not in kept:
                 subprocess.run([*cli.docker(), "image", "rm", tag], capture_output=True)
     except (OSError, ValueError, subprocess.SubprocessError, typer.BadParameter):
         typer.echo("Older restore points were not cleaned up. Remove unneeded files in backups.", err=True)

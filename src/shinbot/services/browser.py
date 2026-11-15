@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconn
 from playwright.async_api import async_playwright
 
 from ..attachments import FileStore, file_name
-from ..browser_policy import assess, public_destination
+from ..browser_policy import assess, endpoint, public_destination
 from . import desktop
 from .browser_backends import BACKENDS, catalog, launch
 from .common import Journal, service_auth
@@ -136,17 +136,23 @@ async def select_profile(browser_id, backend=None):
     control_generation += 1
 
 
+def origin_key(url):
+    # Host and effective port, so ":80" typed in an approved address matches the page the browser reports.
+    host, port = endpoint(url)
+    return f"{host}:{port}"
+
+
 def owner_pages():
     # Whatever the owner left open during takeover is theirs to share with the bot.
     if lease and lease.get("kind") == "human" and browser is not None:
-        private_origins.update(urlparse(p.url).netloc.lower() for p in browser.pages)
+        private_origins.update(origin_key(p.url) for p in browser.pages)
 
 
 async def withheld():
     """Blank a private or local page nobody approved, so a redirect cannot hand its content to the model."""
     url = page.url if page is not None and not page.is_closed() else "about:blank"
     origin = urlparse(url).netloc.lower()
-    if origin in private_origins or await public_destination(url):
+    if origin_key(url) in private_origins or await public_destination(url):
         return None
     await page.goto("about:blank")
     return {
@@ -563,7 +569,7 @@ async def execute_browser(payload: dict):
                 return {"status": "approval_required", **review}
             if required:
                 # The owner saw this target, so a private address they approved may be opened and read.
-                private_origins.add(urlparse(review["destination"]).netloc.lower())
+                private_origins.add(origin_key(review["destination"]))
         prior = journal.claim(payload)
         if prior is not None:
             return prior
@@ -600,7 +606,7 @@ async def execute_browser(payload: dict):
                 await perform_action(operation, args, locator)
             if operation == "back" and mode != "full":
                 # Going back is always the owner's decision outside Full access, wherever it lands.
-                private_origins.add(urlparse(page.url).netloc.lower())
+                private_origins.add(origin_key(page.url))
         except Exception as error:
             no_connection = {
                 "ERR_NAME_NOT_RESOLVED",

@@ -602,10 +602,16 @@ class Plugins:
         if not row:
             raise NotFound("Plugin version not installed.")
         manifest = json.loads(row["manifest"])
-        files = {
-            name: (Path(row["path"]) / name).read_bytes()
-            for name in manifest["files"] + ["shinbot-plugin.json"]
-        }
+        try:
+            files = {
+                name: (Path(row["path"]) / name).read_bytes()
+                for name in manifest["files"] + ["shinbot-plugin.json"]
+            }
+        except OSError:
+            # Reported like any other plugin fault, so a message that needs it fails instead of retrying.
+            raise ValueError(
+                f"The installed files of {manifest.get('name', plugin)} {version} are missing or unreadable. Reinstall it."
+            ) from None
         # The bytes are read and hashed on every use; validating them is repeated only when they change.
         digest = content_digest(files)
         if digest not in self.validated:

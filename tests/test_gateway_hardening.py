@@ -459,7 +459,9 @@ def test_old_restore_points_and_their_images_are_removed(monkeypatch, tmp_path):
 
     def run(command, **kwargs):
         if command[1:3] == ["image", "ls"]:
-            listed = "\n".join([*tags, "shinbot-rollback/other-control:before-update-1.tar"])
+            # Another installation on this engine, one of them with a name that begins with ours.
+            others = ["shinbot-rollback/other-control:before-update-1.tar", "shinbot-rollback/test-two-control:before-update-1.tar"]
+            listed = "\n".join([*tags, *others])
             return subprocess.CompletedProcess(command, 0, listed, "")
         removed.append(command)
         return subprocess.CompletedProcess(command, 0, "", "")
@@ -700,3 +702,14 @@ def test_password_change_loses_to_a_change_made_while_it_was_hashing(owner, appl
     owner.headers.pop("Authorization")
     assert login(owner, "a-brand-new-password").status_code == 401
     assert login(owner, "the-other-devices-password").status_code == 200
+
+
+def test_missing_plugin_files_are_reported_as_a_plugin_fault(application):
+    import shutil
+
+    core = application.state.core
+    staged = core.plugins.stage_from_catalog("official", "research", "1.0.0")
+    row = core.db.one("SELECT path FROM plugins WHERE id='research'")
+    shutil.rmtree(row["path"])
+    with pytest.raises(ValueError, match="missing or unreadable. Reinstall it"):
+        core.plugins.package("research", staged["version"])

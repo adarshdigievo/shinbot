@@ -310,6 +310,17 @@ async def test_private_address_needs_and_honours_the_owners_approval(browser):
     assert not service.private_origins
 
 
+async def test_an_approved_address_with_its_default_port_stays_readable(browser):
+    # The owner approves ":80" spelled out; the browser reports the page without it.
+    args = {"operation": "goto", "url": "http://192.168.1.10:80/app"}
+    browser.lands_on[args["url"]] = "http://192.168.1.10/app"
+    review = await service.execute(request("port", args))
+    result = await service.execute(request("port", args, approval_context=review["context"]))
+    assert result == {"content": [{"type": "text", "text": "page text"}]}
+    assert browser.url == "http://192.168.1.10/app"
+    assert not (await service.execute(request("again", {"operation": "observe"}))).get("isError")
+
+
 async def test_pages_the_owner_left_open_can_be_read_and_full_access_is_unchanged(browser, monkeypatch):
     browser.url = "http://nas.lan/files"
     monkeypatch.setattr(service, "lease", {"kind": "human", "owner": "owner"})
