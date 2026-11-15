@@ -83,7 +83,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [control, runtime, computer, browser, desktop, telegram]
+        service: [control, runtime, computer, browser, desktop]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -123,6 +123,9 @@ jobs:
           name: python-distributions
           path: dist
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          # A retried release must get past a version that an earlier attempt already uploaded.
+          skip-existing: true
   dockerhub-metadata:
     name: Update Docker Hub overview
     needs: [images, pypi]
@@ -173,7 +176,7 @@ jobs:
             echo 'A different release is latest; leaving stable aliases unchanged.'
             exit 0
           fi
-          for service in control runtime computer browser desktop telegram; do
+          for service in control runtime computer browser desktop; do
             docker buildx imagetools create \
               --tag "adarshd96/shinbot:latest-$service" \
               "adarshd96/shinbot:$VERSION-$service"

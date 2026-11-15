@@ -19,9 +19,10 @@ COPY --from=assets /build/runtime/dist ./dist
 RUN mkdir /data && chown node:node /data
 USER node
 ENV SHINBOT_RUNTIME_DATA=/data
-CMD ["flock", "-n", "/data/runtime.lock", "node", "dist/server.js"]
+# -F keeps node as the process that receives the stop signal, so it can close cleanly.
+CMD ["flock", "-n", "-F", "/data/runtime.lock", "node", "dist/server.js"]
 
-FROM python:3.13-slim-bookworm AS python-base
+FROM python:3.13.12-slim-bookworm AS python-base
 COPY --from=ghcr.io/astral-sh/uv:0.11.2 /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
@@ -90,11 +91,3 @@ COPY deploy/shinbot-browser-helper.desktop /usr/share/xfce4/helpers/shinbot-brow
 RUN chmod 755 /usr/local/bin/shinbot-desktop-browser /usr/local/bin/shinbot-open-browser && sed -i 's/^WebBrowser=.*/WebBrowser=shinbot-browser/' /etc/xdg/xfce4/helpers.rc && printf '[Default Applications]\nx-scheme-handler/http=shinbot-browser.desktop\nx-scheme-handler/https=shinbot-browser.desktop\n' > /etc/xdg/mimeapps.list && update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/shinbot-open-browser 100
 ENV SHINBOT_DESKTOP=1 SHINBOT_DESKTOP_STATE=/run/shinbot-desktop SHINBOT_BROWSER_DATA=/data/browser SHINBOT_EXECUTOR_DATA=/data/computer SHINBOT_WORKSPACE=/workspace
 CMD ["python", "-m", "shinbot.services.desktop_runner"]
-
-FROM python-base AS telegram
-RUN uv sync --frozen --no-install-project --no-dev --extra telegram && groupadd -g 1000 shinbot && useradd -u 1000 -g shinbot -m shinbot
-COPY src ./src
-COPY README.md LICENSE ./
-RUN uv sync --frozen --no-dev --extra telegram
-USER shinbot
-CMD ["python", "-m", "shinbot.services.telegram"]

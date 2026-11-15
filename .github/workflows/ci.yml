@@ -35,17 +35,18 @@ jobs:
           node-version: '22.23.1'
           cache: npm
           cache-dependency-path: runtime/package-lock.json
-      - run: uv sync --frozen --extra computer --extra security --extra telegram
+      - run: uv sync --frozen --extra computer --extra security
       - run: uv run --frozen ruff check src tests scripts
       - run: uv run --frozen python scripts/release.py check
       - run: npm --prefix computer ci --ignore-scripts
-      - run: uv run --frozen --extra computer --extra security --extra telegram pytest -n auto --durations=10
+      - run: uv run --frozen --extra computer --extra security pytest -n auto --durations=10
       - run: npm --prefix runtime ci --ignore-scripts
       - name: Check locked Node dependencies for advisories
         if: runner.os == 'Linux'
         run: |
           npm --prefix runtime audit --audit-level=low
           npm --prefix computer audit --audit-level=low
+          npm --prefix browser audit --audit-level=low
       - run: npm --prefix runtime run build
       - run: npm --prefix runtime test
       - run: node --test tests/*.test.mjs
@@ -107,6 +108,18 @@ jobs:
       - uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 # 1.7.12
         with:
           args: -color
+  desktop-image:
+    # The desktop target ships in releases but no journey runs it; build it so a broken layer
+    # is caught here instead of in the release.
+    name: Desktop image build
+    if: github.event_name != 'workflow_dispatch' || inputs.docker_tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: docker build --file deploy/Dockerfile --target desktop --tag shinbot-dev/shinbot:ci-desktop .
   docker:
     name: Container integration (${{ matrix.name }})
     if: github.event_name != 'workflow_dispatch' || inputs.docker_tests
@@ -143,7 +156,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22.23.1'
-      - run: uv sync --frozen --extra computer --extra security --extra telegram
+      - run: uv sync --frozen --extra computer --extra security
       - run: npm --prefix runtime ci --ignore-scripts
       - run: node scripts/copy_web_assets.mjs
       - if: matrix.browser
@@ -155,7 +168,7 @@ jobs:
           # Docker's own builder writes straight into the image store and builds the
           # targets together, sharing their common stages.
           builds=()
-          for service in control runtime computer browser telegram; do
+          for service in control runtime computer browser; do
             docker build --file deploy/Dockerfile --target "$service" \
               --tag "shinbot-dev/shinbot:$version-$service" . > "$RUNNER_TEMP/build-$service.log" 2>&1 &
             builds+=("$!")
