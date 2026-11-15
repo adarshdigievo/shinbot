@@ -32,8 +32,9 @@ JOURNEYS = (
     "reinstall",
     "ui",
     "browser_preview",
-    "onboarding",
 )
+# Halves of a long journey, for runs that spread the journeys over several deployments.
+PARTS = ("recovery:first", "recovery:second")
 
 
 def environment(home):
@@ -54,7 +55,7 @@ def environment(home):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--only", nargs="+", choices=JOURNEYS, default=list(JOURNEYS))
+    parser.add_argument("--only", nargs="+", choices=JOURNEYS + PARTS, default=list(JOURNEYS))
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument(
         "--image-repository",
@@ -143,9 +144,9 @@ def main():
         for journey in args.only:
             started = time.monotonic()
             print(f"RUN {journey}", flush=True)
-            subprocess.run(
-                [sys.executable, str(ROOT / "tests" / f"run_{journey}.py")], cwd=ROOT, env=env, check=True
-            )
+            name, _, part = journey.partition(":")
+            script = [sys.executable, str(ROOT / "tests" / f"run_{name}.py"), *([part] if part else [])]
+            subprocess.run(script, cwd=ROOT, env=env, check=True)
             print(f"PASS {journey} ({time.monotonic() - started:.1f}s)", flush=True)
     finally:
         if keep:

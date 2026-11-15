@@ -161,7 +161,8 @@ def archive_backup(destination, release=None):
         }
         write_json(root / "manifest.json", manifest)
         target = root / "complete.tar.gz"
-        with tarfile.open(target, "w:gz") as archive:
+        # The volumes inside are already compressed, so pack this envelope quickly.
+        with tarfile.open(target, "w:gz", compresslevel=1) as archive:
             for name in ("manifest.json", "deploy.env", "release.json", "volumes.tar.gz"):
                 archive.add(root / name, arcname=name)
         target.chmod(0o600)

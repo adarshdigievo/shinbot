@@ -73,7 +73,8 @@ def backup(destination):
         raise ValueError("Backup already exists; choose another filename.")
     temporary = target.with_suffix(target.suffix + ".partial")
     try:
-        with tarfile.open(temporary, "w:gz") as archive:
+        # Level 6 is under half the time of the default 9 for about the same size.
+        with tarfile.open(temporary, "w:gz", compresslevel=6) as archive:
             for name in sorted(VOLUMES):
 
                 def persistent(member):
