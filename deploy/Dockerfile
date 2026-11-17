@@ -66,7 +66,14 @@ FROM python-base AS browser
 ENV XDG_CACHE_HOME=/opt/browser-cache PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 COPY --from=browser-tools /opt/shinbot-browser /opt/venv/share/shinbot/browser
 RUN uv sync --frozen --no-install-project --no-dev --extra browser && playwright install --with-deps chromium && apt-get update && apt-get install -y --no-install-recommends xvfb tigervnc-scraping-server tigervnc-tools websockify && rm -rf /var/lib/apt/lists/* && groupadd -g 1000 browser && useradd -u 1000 -g browser -m browser && mkdir /data && chown browser:browser /data && chmod -R a+rX /opt/playwright
-RUN playwright install-deps firefox && python -m camoufox fetch official/stable/156.0.1-beta.36 && chmod -R a+rX /opt/browser-cache && chown -R browser:browser /opt/browser-cache
+# Camoufox lists its releases through the GitHub API, which rate-limits anonymous requests, and its
+# fetch command exits 0 even when that fails. Use a token when the build supplies one, and stop the
+# build unless the browser is really there: an image without it only fails later, when it is opened.
+COPY deploy/check-camoufox.py /tmp/check-camoufox.py
+RUN --mount=type=secret,id=github_token playwright install-deps firefox \
+    && GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" python -m camoufox fetch official/stable/156.0.1-beta.36 \
+    && python /tmp/check-camoufox.py \
+    && chmod -R a+rX /opt/browser-cache && chown -R browser:browser /opt/browser-cache
 COPY src ./src
 COPY README.md LICENSE ./
 RUN uv sync --frozen --no-dev --extra browser

@@ -100,6 +100,8 @@ jobs:
           uv sync --frozen --extra computer --extra security --extra browser
           uv run --no-sync playwright install-deps firefox
           uv run --no-sync python -m camoufox fetch official/stable/156.0.1-beta.36
+          # The fetch exits 0 even when it installed nothing.
+          uv run --no-sync python -c "import sys; from shinbot.services.browser_backends import camoufox_executable; sys.exit(0 if camoufox_executable() else 'Camoufox was not installed.')"
       - name: Test Camoufox and chat file delivery
         run: uv run --no-sync python tests/run_attachments.py
   workflows:
@@ -124,7 +126,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - run: docker build --file deploy/Dockerfile --target desktop --tag shinbot-dev/shinbot:ci-desktop .
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+        # The token lets the Camoufox download in the image authenticate to the GitHub API.
+        run: >
+          docker build --file deploy/Dockerfile --target desktop
+          --secret id=github_token,env=GITHUB_TOKEN --tag shinbot-dev/shinbot:ci-desktop .
   docker:
     name: Container integration (${{ matrix.name }})
     if: github.event_name != 'workflow_dispatch' || inputs.docker_tests
@@ -168,13 +175,16 @@ jobs:
         run: uv run --frozen playwright install --with-deps chromium
       - name: Build all service images
         shell: bash
+        env:
+          # Lets the Camoufox download in the browser image authenticate to the GitHub API.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           version=$(uv run --frozen python -c 'from shinbot import __version__; print(__version__)')
           # Docker's own builder writes straight into the image store and builds the
           # targets together, sharing their common stages.
           builds=()
           for service in control runtime computer browser; do
-            docker build --file deploy/Dockerfile --target "$service" \
+            docker build --file deploy/Dockerfile --target "$service" --secret id=github_token,env=GITHUB_TOKEN \
               --tag "shinbot-dev/shinbot:$version-$service" . > "$RUNNER_TEMP/build-$service.log" 2>&1 &
             builds+=("$!")
           done

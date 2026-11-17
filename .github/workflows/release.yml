@@ -106,6 +106,9 @@ jobs:
           cache-to: type=registry,ref=adarshd96/shinbot-buildcache:${{ matrix.service }},mode=max
           provenance: mode=max
           sbom: true
+          # Lets the Camoufox download in the browser images authenticate to the GitHub API.
+          secrets: |
+            github_token=${{ github.token }}
   pypi:
     name: Publish to PyPI
     needs: [distributions, images]

@@ -87,6 +87,8 @@ Use `--only ui` or `--only reinstall` to run one journey. `--prepare-only` leave
 
 These builds use `shinbot-dev/shinbot` tags, separate from the published image tags a personal installation uses. The test runner saves that image repository in its isolated deployment. Use `--image-repository NAME` if you built a different local image set. CI builds the same targets, all at once, in its `Container integration` jobs, and splits the journeys into five groups that run side by side. A separate job builds the `desktop` target, which no journey runs.
 
+The browser image downloads Camoufox, whose release list comes from the GitHub API. If the build stops with "Camoufox was not installed", GitHub has rate-limited anonymous requests from your address. Wait and retry, or let the build authenticate by adding `--secret id=github_token,env=GITHUB_TOKEN` to `docker build` with a token in that variable. CI and the release workflow do this.
+
 ## Build the website
 
 The custom landing page lives in `site/`. Great Docs builds the authored guides from `docs/` using `great-docs.yml`. Install [Quarto](https://quarto.org/docs/get-started/) at the version used in `site-build.yml`, then run:
