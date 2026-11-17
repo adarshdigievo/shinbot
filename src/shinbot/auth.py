@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import hmac
+import json
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -77,12 +78,20 @@ class Auth:
             raise HTTPException(429, "Too many attempts. Try again in a minute.")
         raise HTTPException(status, detail)
 
-    def session(self, kind="browser"):
+    def session(self, kind="browser", verified=None):
+        """Start a session. After a sign-in, `verified` is the stored password that was checked."""
         token = secrets.token_urlsafe(32)
-        self.db.execute(
-            "INSERT INTO sessions VALUES (?,?,?)",
-            (digest(token), time.time() + (86400 * 7 if kind == "browser" else 86400 * 30), kind),
-        )
+        with self.db.transaction() as db:
+            if verified is not None:
+                # Checking a password takes a moment off the event loop. If it was changed or
+                # reset meanwhile, the old one must not open a session that outlives the change.
+                saved = db.execute("SELECT value FROM settings WHERE key='password'").fetchone()
+                if not saved or json.loads(saved["value"]) != verified:
+                    raise HTTPException(401, "The password was just changed. Sign in with the new one.")
+            db.execute(
+                "INSERT INTO sessions VALUES (?,?,?)",
+                (digest(token), time.time() + (86400 * 7 if kind == "browser" else 86400 * 30), kind),
+            )
         return token
 
     def require(self, request: Request):

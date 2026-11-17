@@ -120,6 +120,14 @@ def child_environment(name, root, config):
     return env
 
 
+def rotate(log, limit=10_000_000):
+    """Keep one previous log file. Running services hold the file open in append mode, so it is
+    copied and emptied in place and they carry on writing at its new end."""
+    if log.exists() and log.stat().st_size > limit:
+        shutil.copyfile(log, log.with_suffix(".log.1"))
+        os.truncate(log, 0)
+
+
 def supervise():
     os.umask(0o077)
     root, config = configuration()
@@ -132,7 +140,7 @@ def supervise():
     logs.mkdir(mode=0o700, exist_ok=True)
     stopping = False
     children, streams, retries = {}, {}, {}
-    desktop_urls = None
+    desktop_urls, rotated = None, time.monotonic()
 
     def stop(*_):
         nonlocal stopping
@@ -163,11 +171,8 @@ def supervise():
                 if time.monotonic() < retries.get(name, 0):
                     continue
                 if name not in streams:
-                    log = logs / f"{name}.log"
-                    # Keep one previous file so logs cannot grow without bound.
-                    if log.exists() and log.stat().st_size > 10_000_000:
-                        log.replace(log.with_suffix(".log.1"))
-                    streams[name] = log.open("ab", buffering=0)
+                    rotate(logs / f"{name}.log")
+                    streams[name] = (logs / f"{name}.log").open("ab", buffering=0)
                 if name == "desktop":
                     (root / "desktop-endpoints.json").unlink(missing_ok=True)
                 children[name] = subprocess.Popen(
@@ -180,6 +185,11 @@ def supervise():
                 )
                 retries[name] = time.monotonic() + 5
                 (root / "processes.json").write_text(json.dumps({k: p.pid for k, p in children.items()}))
+            if time.monotonic() - rotated > 60:
+                # Services run for weeks; check their logs while they run, not only at start.
+                rotated = time.monotonic()
+                for name in streams:
+                    rotate(logs / f"{name}.log")
             time.sleep(0.5)
     finally:
         # Stop intake before the services that carry out its actions.

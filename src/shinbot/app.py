@@ -310,10 +310,11 @@ def create_app(config: Config | None = None):
                     )
                     preferences["timezone"] = zone
                     db.execute("UPDATE settings SET value=? WHERE key='preferences'", (packed(preferences),))
+                current = encoded
             elif not await asyncio.to_thread(verify_password, password, current):
                 await core.auth.failed(peer, 401, "Incorrect password.")
         cli = payload.get("cli") is True
-        token = core.auth.session("cli" if cli else "browser")
+        token = core.auth.session("cli" if cli else "browser", verified=current)
         response = JSONResponse({"ok": True, **({"token": token} if cli else {})})
         if not cli:
             response.set_cookie(

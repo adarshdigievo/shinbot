@@ -713,3 +713,26 @@ def test_missing_plugin_files_are_reported_as_a_plugin_fault(application):
     shutil.rmtree(row["path"])
     with pytest.raises(ValueError, match="missing or unreadable. Reinstall it"):
         core.plugins.package("research", staged["version"])
+
+
+def test_a_sign_in_that_was_verifying_the_old_password_gets_no_session(owner, application, monkeypatch):
+    from shinbot import app as gateway
+
+    core = application.state.core
+    verify_password = gateway.verify_password
+
+    def racing(password, saved):
+        # The password is changed (and every session revoked) while this sign-in is being checked.
+        matches = verify_password(password, saved)
+        core.db.set("password", gateway.hash_password("a-brand-new-password"))
+        core.db.execute("DELETE FROM sessions")
+        return matches
+
+    monkeypatch.setattr(gateway, "verify_password", racing)
+    owner.headers.pop("Authorization")
+    stale = login(owner, PASSWORD)
+    assert stale.status_code == 401 and "just changed" in stale.json()["detail"]
+    assert core.db.one("SELECT count(*) AS n FROM sessions")["n"] == 0
+    monkeypatch.setattr(gateway, "verify_password", verify_password)
+    assert login(owner, PASSWORD).status_code == 401
+    assert login(owner, "a-brand-new-password").status_code == 200

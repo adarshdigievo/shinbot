@@ -240,3 +240,16 @@ def test_desktop_backup_copies_workspace_and_restarts_on_failure(native_config, 
     destination = next((root / "backups").iterdir())
     assert (destination / "complete").exists() is not fails
     assert calls == ["stop", "start"]
+
+
+def test_logs_rotate_under_a_service_that_keeps_writing(tmp_path):
+    log = tmp_path / "control.log"
+    with log.open("ab", buffering=0) as service:
+        service.write(b"old line\n" * 20)
+        native.rotate(log, limit=1000)
+        assert log.read_bytes() == b"old line\n" * 20
+        native.rotate(log, limit=100)
+        # The service's open handle keeps working and writes at the new end of the emptied file.
+        service.write(b"new line\n")
+        assert log.read_bytes() == b"new line\n"
+        assert (tmp_path / "control.log.1").read_bytes() == b"old line\n" * 20
