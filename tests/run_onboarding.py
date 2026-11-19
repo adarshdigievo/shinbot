@@ -259,7 +259,10 @@ with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
                 ) as staged_telegram:
                     page.locator('[data-install="telegram"]').click()
                 assert staged_telegram.value.ok
-                expect(page.get_by_text("shinbot telegram-setup", exact=True)).to_be_visible()
+                # Telegram is connected in the app like any other plugin; nothing runs on the host.
+                telegram_dialog = page.get_by_role("dialog", name="Set up Telegram", exact=True)
+                expect(telegram_dialog.get_by_role("button", name="Connect account", exact=True)).to_be_visible()
+                expect(page.get_by_text("shinbot telegram-setup")).to_have_count(0)
                 page.screenshot(path=str(plugin_out / "plugins-light.png"), full_page=True)
                 page.get_by_role("button", name="Close dialog", exact=True).click()
                 page.emulate_media(color_scheme="dark")
@@ -638,6 +641,9 @@ with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
                 job_dialog.locator('[name="mode"]').select_option("once")
                 expect(job_dialog.get_by_label("Date and time", exact=True)).to_have_attribute("type", "datetime-local")
                 job_dialog.get_by_role("button", name="Close dialog", exact=True).click()
+                # A form with unsaved input asks before it closes.
+                page.get_by_role("button", name="Discard changes", exact=True).click()
+                expect(job_dialog).to_have_count(0)
                 page.locator('[data-view="settings"]').click()
                 login_posts = []
 
@@ -694,7 +700,10 @@ with tempfile.TemporaryDirectory(prefix="shinbot-onboarding-") as directory:
                 expect(page.get_by_role("button", name="Always allow", exact=True)).to_have_count(3)
                 page.screenshot(path=str(permissions_out / "chat-approvals-light.png"), full_page=True)
                 for scope,label in (("once","Allow once"),("chat","Allow for this chat"),("always","Always allow")):
-                    page.locator('[data-entry="action-review-'+scope+'"]').get_by_role("button", name=label, exact=True).click()
+                    # Wait for each decision to be stored; the rules are read right after the loop.
+                    with page.expect_response(lambda r, s=scope: r.url.endswith("/api/actions/review-"+s+"/decision")) as decided:
+                        page.locator('[data-entry="action-review-'+scope+'"]').get_by_role("button", name=label, exact=True).click()
+                    assert decided.value.ok
                 rules=page.request.get(url+"/api/approvals").json()
                 assert sorted(rule["scope"] for rule in rules)==["always","chat"]
                 page.locator('[data-view="settings"]').click()

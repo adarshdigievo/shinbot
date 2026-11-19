@@ -121,7 +121,7 @@ def test_scheduled_job_uses_selected_bot_and_task_requests_are_bot_bound(owner, 
     assert core.tasks.detail(task_id)["bot_id"] == bot["id"]
     request = {"content": "hello", "request_id": "bot-bound", "bot_id": bot["id"]}
     assert owner.post("/api/tasks", json=request).status_code == 200
-    assert owner.post("/api/tasks", json={**request, "bot_id": "default"}).status_code == 400
+    assert owner.post("/api/tasks", json={**request, "bot_id": "default"}).status_code == 409
 
 
 def test_public_welcome_does_not_reveal_profiles(client, application):

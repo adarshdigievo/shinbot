@@ -15,8 +15,10 @@ from .auth import Auth
 from .board import Board
 from .bots import Bots
 from .calendar import Calendar
+from .channels import Telegram
 from .coordinator import Coordinator
-from .db import Database, packed, uid
+from .db import Database, packed
+from .errors import NotFound
 from .github_connect import GitHubConnect
 from .github_inbox import GitHubInbox
 from .hooks import HookBlocked, Hooks
@@ -58,6 +60,7 @@ class Core:
         self.learning = Learning(self.db, self.plugins)
         self.updates = Updates(self.db)
         self.coordinator = Coordinator(self)
+        self.telegram = Telegram(self)
         self.provider_login = ProviderLogin(self)
         self.running_actions = {}
         self.service_client = None
@@ -546,8 +549,9 @@ class Core:
         mode = task.get("approval_mode", "auto")
         assessment = None
         assessment_error = None
-        guarded = mode == "auto" and guarded_action(tool, args)
-        if mode == "auto" and tool.startswith("plugin:"):
+        # Ask is never weaker than Auto: both give these actions a separate, one-time decision.
+        guarded = mode != "full" and guarded_action(tool, args)
+        if mode != "full" and tool.startswith("plugin:"):
             _, plugin_id, version, name = tool.split(":", 3)
             manifest = json.loads(
                 self.db.one("SELECT manifest FROM plugins WHERE id=? AND version=?", (plugin_id, version))[
@@ -641,22 +645,7 @@ class Core:
                     )
                 if needs:
                     db.execute("UPDATE tasks SET status='waiting' WHERE id=?", (task_id,))
-                    if task["source"].startswith("telegram:"):
-                        db.execute(
-                            "INSERT INTO outbox VALUES (?,?,?,'pending',?,?,NULL)",
-                            (
-                                uid(),
-                                "telegram",
-                                packed(
-                                    {
-                                        "text": f"ShinBot needs your decision for {tool}. Open {self.config.origin}",
-                                        "chat_id": task["source"].split(":", 1)[1],
-                                    }
-                                ),
-                                time.time(),
-                                task_id,
-                            ),
-                        )
+                    self.telegram.request_approval(db, task, action_id)
             row = dict(db.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone())
             if row["status"] in {"pending", "approved"} and row["expires"] < time.time():
                 db.execute(
@@ -1198,6 +1187,8 @@ class Core:
 
     async def cancel(self, task_id):
         with self.db.transaction() as sql:
+            if not sql.execute("SELECT 1 FROM tasks WHERE id=?", (task_id,)).fetchone():
+                raise NotFound("Task not found.")
             sql.execute(
                 "WITH RECURSIVE family(id) AS (SELECT ? UNION ALL SELECT t.id FROM tasks t JOIN family f ON t.parent_task_id=f.id) "
                 "UPDATE project_workspaces SET state='abandoned' WHERE task_id IS NULL AND state='preparing' AND parent_task_id IN (SELECT id FROM family)",
@@ -1205,10 +1196,11 @@ class Core:
             )
             descendants = sql.execute(
                 "WITH RECURSIVE family(id) AS (SELECT ? UNION ALL SELECT t.id FROM tasks t JOIN family f ON t.parent_task_id=f.id) "
-                "SELECT t.id FROM tasks t JOIN family f ON t.id=f.id WHERE t.id=? OR t.status NOT IN ('completed','failed','cancelled')",
+                # A finished conversation stays finished; repeating Stop retries the service cancellation.
+                "SELECT t.id FROM tasks t JOIN family f ON t.id=f.id WHERE t.status NOT IN ('completed','failed','cancelled') OR (t.id=? AND t.status='cancelled')",
                 (task_id, task_id),
             ).fetchall()
-            targets = [row["id"] for row in descendants] or [task_id]
+            targets = [row["id"] for row in descendants]
             for key in targets:
                 sql.execute("INSERT OR IGNORE INTO pending_aborts VALUES (?)", (key,))
                 sql.execute(
@@ -1233,3 +1225,4 @@ class Core:
                 await self.coordinator.abort_task(key)
             except httpx.HTTPError:
                 self.db.event("warning", "Cancellation saved; runtime acknowledgement is pending.", key)
+        return bool(targets)

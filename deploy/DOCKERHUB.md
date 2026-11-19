@@ -34,11 +34,10 @@ ShinBot runs as a set of cooperating services. The launcher manages their config
 | `VERSION-computer` | Workspace files, commands, and installed tools |
 | `VERSION-browser` | Persistent browser, live view, and browser control |
 | `VERSION-desktop` | Optional desktop environment with browser and computer tools |
-| `VERSION-telegram` | Optional Telegram connection |
 
-Replace `VERSION` with a version from the [Tags tab](https://hub.docker.com/r/adarshd96/shinbot/tags), and use the same version for every service. All six images support **Linux AMD64 and ARM64**.
+Replace `VERSION` with a version from the [Tags tab](https://hub.docker.com/r/adarshd96/shinbot/tags), and use the same version for every service. All five images support **Linux AMD64 and ARM64**.
 
-Prereleases have versioned tags. Stable releases also provide `latest-control`, `latest-runtime`, `latest-computer`, `latest-browser`, `latest-desktop`, and `latest-telegram`. Use the launcher for a complete installation; pulling one service image alone does not start the full application.
+Prereleases have versioned tags. Stable releases also provide `latest-control`, `latest-runtime`, `latest-computer`, `latest-browser`, and `latest-desktop`. Use the launcher for a complete installation; pulling one service image alone does not start the full application.
 
 ## Keep your data
 

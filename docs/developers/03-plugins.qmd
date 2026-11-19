@@ -4,7 +4,7 @@ execute:
   enabled: false
 ---
 
-A plugin is a versioned directory. Use a skill for instructions, MCP for tools, or an extension for sidebar pages, themes, UI patches and lifecycle hooks. Extensions can include MCP tools in the same package. Channel plugins run as separately managed services and need host integration.
+A plugin is a versioned directory. Use a skill for instructions, MCP for tools, or an extension for sidebar pages, themes, UI patches and lifecycle hooks. Extensions can include MCP tools in the same package. Channels, such as Telegram, run inside ShinBot itself, so only the packages shipped with ShinBot can use the `channel` kind.
 
 ## A skill package
 

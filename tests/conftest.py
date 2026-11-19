@@ -51,6 +51,18 @@ def scan_each_artifact_once(tmp_path_factory):
     security.Security._run = run
 
 
+@pytest.fixture(autouse=True)
+def offline_names(monkeypatch):
+    """Browser policy resolves host names; tests answer with a public address instead of the network."""
+    from shinbot import browser_policy
+
+    async def resolve(host):
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr(browser_policy, "resolve", resolve)
+    monkeypatch.setattr(browser_policy, "resolved", {})
+
+
 @pytest.fixture
 def application(tmp_path):
     application = create_app(
@@ -61,7 +73,6 @@ def application(tmp_path):
             service_token="r" * 40,
             computer_token="c" * 40,
             browser_token="b" * 40,
-            channel_token="t" * 40,
         )
     )
 

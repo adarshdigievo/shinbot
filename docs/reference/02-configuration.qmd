@@ -20,6 +20,11 @@ The launcher stores installation details in `~/.shinbot/deploy.env` and CLI conn
 | `SHINBOT_DOCKER_CONTEXT` | Saved Docker context; use the same engine for an existing installation |
 | `SHINBOT_IMAGE` | Override the image repository while preserving the versioned service tags |
 | `SHINBOT_SAFE_MODE` | Set to `1` to hold background execution while inspecting an installation |
+| `SHINBOT_TRUSTED_PROXIES` | Number of your own reverse proxies in front of the gateway; defaults to `0`. With `1`, sign-in limits use the client address your proxy appends to `X-Forwarded-For`. Set it only when the gateway is reachable through that proxy alone |
+| `SHINBOT_BROWSER_TRUSTED_HOSTS` | Comma-separated hosts (`host` or `host:port`) on your own network that bots may open in Auto mode without asking, for example `nas.lan,192.168.1.20:3000`. Other private and local addresses need your approval first |
+| `SHINBOT_MODEL_RETRIES` | How many times a failing model request is retried before the reply fails; defaults to `240` (about two hours) |
+| `SHINBOT_MODEL_IDLE_MS` | How long to wait for a silent model before retrying, in milliseconds; defaults to `60000`. Raise it for slow local models |
+| `SHINBOT_TELEGRAM_API_URL` | Address of a self-hosted Telegram Bot API server for the Telegram plugin; defaults to `https://api.telegram.org` |
 | `SHINBOT_COMPOSE_FILE` | Advanced host override for a custom Compose file |
 
 The launcher generates internal service tokens and saves the engine identity. Keep those values intact. Do not expose internal runtime, Computer, browser or VNC ports. For remote access and TLS, follow the [server access guide](../user-guide/remote-access.html).

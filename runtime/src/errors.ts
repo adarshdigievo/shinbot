@@ -1,3 +1,14 @@
+// A deliberate refusal of the caller's request. Everything else the runtime throws is reported as a 500.
+export function rejected(message: string, statusCode = 400) {
+  return Object.assign(new Error(message), {statusCode});
+}
+
+export function errorReply(error: any) {
+  const code = Number(error?.statusCode);
+  return {statusCode: Number.isInteger(code) && code >= 400 && code < 600 ? code : 500,
+    body: {error: String(error?.message || 'The runtime could not complete this request.').slice(0, 500)}};
+}
+
 export function answerError(messages: readonly any[], answer: string): string | undefined {
   const last = messages.filter(message => message.role === 'assistant').at(-1);
   if (last?.stopReason === 'length') return 'The model reached its response limit before finishing. Ask it to continue from the last confirmed action, or use a model with a larger output limit.';

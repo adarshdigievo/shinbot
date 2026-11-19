@@ -24,3 +24,20 @@ test('permanent errors are not retried and durable backoff stays bounded after a
   assert.equal(isRetryableAssistantError({stopReason:'error',errorMessage:'insufficient_quota billing'}),false);
   assert.equal(isRetryableAssistantError({stopReason:'error',errorMessage:'Connection error.'}),true);
 });
+
+test('retries end: a service that keeps answering with errors is given up on, an unreachable one is not', async () => {
+  assert.ok(Number.isSafeInteger(durableRetry.maxRetries) && durableRetry.maxRetries>=100 && durableRetry.maxRetries<=1000);
+  // The last retry is still spaced by the capped delay, so the bound is hours, not days.
+  assert.equal(retryDelayMs(durableRetry,durableRetry.maxRetries),30000);
+  let calls=0;
+  const states=[];
+  await assert.rejects(withConnectionRecovery(async()=>{calls++;throw new TemporaryConnectionError();},undefined,
+    async state=>{states.push(state);},1),/kept returning errors/);
+  assert.equal(calls,2);
+  assert.deepEqual(states,[true,false]);
+  calls=0;
+  assert.equal(await withConnectionRecovery(async()=>{
+    if(++calls<3) throw new TypeError('fetch failed');
+    return 'receipt';
+  },undefined,undefined,0),'receipt');
+});

@@ -61,7 +61,7 @@ def test_creation_idempotency_and_body_validation(owner):
     body = {"content": "hello", "request_id": "same-request"}
     first = owner.post("/api/tasks", json=body).json()
     assert owner.post("/api/tasks", json=body).json()["id"] == first["id"]
-    assert owner.post("/api/tasks", json={**body, "content": "different"}).status_code == 400
+    assert owner.post("/api/tasks", json={**body, "content": "different"}).status_code == 409
     assert owner.post("/api/notes", json={}).status_code == 400
     assert owner.post("/api/notes", content=iter([b"x" * 1_000_000] * 4)).status_code == 413
     assert owner.post("/api/notes", content=b"{}", headers={"Content-Length": "invalid"}).status_code == 400

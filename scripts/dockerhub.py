@@ -11,12 +11,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "adarshd96/shinbot"
 CACHE_REPOSITORY = "adarshd96/shinbot-buildcache"
-SERVICES = ("control", "runtime", "computer", "browser", "desktop", "telegram")
+SERVICES = ("control", "runtime", "computer", "browser", "desktop")
 DESCRIPTION = "Self-hosted AI assistant with browser control, files, scheduled tasks, plugins, and bot profiles."
 CACHE_DESCRIPTION = "BuildKit caches for ShinBot releases. Install ShinBot from adarshd96/shinbot."
 CACHE_OVERVIEW = """# ShinBot build caches
 
-BuildKit uses these caches to speed up ShinBot's release builds. Tags correspond to the control, runtime, computer, browser, desktop, and telegram build targets.
+BuildKit uses these caches to speed up ShinBot's release builds. Tags correspond to the control, runtime, computer, browser, and desktop build targets.
 
 For runnable service images and installation instructions, visit [adarshd96/shinbot](https://hub.docker.com/r/adarshd96/shinbot).
 """

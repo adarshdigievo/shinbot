@@ -2,12 +2,11 @@ import asyncio
 import json
 import logging
 import time
+import traceback
 
 import httpx
 
-from .channels import telegram_owner
-from .db import packed, uid
-from .hooks import HookBlocked
+from .channels import enqueue
 
 log = logging.getLogger(__name__)
 
@@ -21,6 +20,7 @@ class Coordinator:
         self.wake = asyncio.Event()
         self.last_health = 0.0
         self.polls = {}
+        self.runtime_errors = {}
         self.dispatch_order = {}
 
     def settle_task_status(self, sql, task_id, status, error=None):
@@ -149,18 +149,33 @@ class Coordinator:
         polls = [r for r in running if self.polls.get(r["id"], (0, 0, None))[0] <= now]
         live_ids = {r["id"] for r in running}
         self.polls = {key: value for key, value in self.polls.items() if key in live_ids}
+        waiting = live_ids | {r["id"] for r in queued} | {r["id"] for r in steering}
+        self.runtime_errors = {k: v for k, v in self.runtime_errors.items() if k in waiting}
         semaphore = asyncio.Semaphore(4)
 
         async def process_one(row):
             try:
                 async with semaphore:
                     await self.process(row)
+                self.runtime_errors.pop(row["id"], None)
             except httpx.HTTPStatusError as exc:
-                if exc.response.status_code < 500:
+                status = exc.response.status_code
+                # An internal runtime error is retried, but not forever: the same request failing
+                # for ten minutes will not start working. Holds and restarts (503) just wait.
+                stuck = status == 500 and (
+                    time.monotonic() - self.runtime_errors.setdefault(row["id"], time.monotonic()) > 600
+                )
+                if status < 500 or stuck:
                     try:
                         error = exc.response.json().get("error", "Runtime rejected this request.")
                     except ValueError:
                         error = "Runtime rejected this request."
+                    if stuck:
+                        error = "The runtime kept failing on this request. Send it again; if it repeats, check the runtime logs."
+                    self.runtime_errors.pop(row["id"], None)
+                    if stuck and row["submission_id"] is not None:
+                        # The runtime accepted this work and may still be running it: stop it too.
+                        db.execute("INSERT OR IGNORE INTO pending_aborts VALUES (?)", (row["task_id"],))
                     db.execute(
                         "UPDATE messages SET status='failed',error=?,finished=? WHERE id=? AND status NOT IN ('cancelled','completed')",
                         (str(error)[:1000], time.time(), row["id"]),
@@ -168,6 +183,7 @@ class Coordinator:
                     with db.transaction() as sql:
                         self.settle_task_status(sql, row["task_id"], "failed", str(error)[:1000])
                 else:
+                    self.last_error = "HTTPStatusError"
                     self.ready = False
             except (httpx.TransportError, ValueError, KeyError) as exc:
                 self.last_error = type(exc).__name__
@@ -177,7 +193,11 @@ class Coordinator:
                     (row["task_id"],),
                 )
 
-        await asyncio.gather(*(process_one(row) for row in [*polls, *dispatch]))
+        # Let every message finish its step before reporting a failure; nothing keeps running detached.
+        results = await asyncio.gather(*(process_one(row) for row in [*polls, *dispatch]), return_exceptions=True)
+        for failure in results:
+            if isinstance(failure, BaseException):
+                raise failure
 
     async def process(self, row):
         db = self.core.db
@@ -213,13 +233,23 @@ class Coordinator:
                         row,
                         {"content": json.loads(row["payload"])["content"], "context": ""},
                     )
-                except HookBlocked as exc:
+                    instructions = self.core.instructions(row) + (
+                        "\n\nPlugin context:\n" + hook["context"] if hook.get("context") else ""
+                    )
+                except (ValueError, KeyError) as exc:
+                    # A plugin's settings, files or hook output are the owner's to fix. Retrying as a
+                    # lost runtime connection would hold this chat, and every reconcile, forever.
+                    reason = (
+                        str(exc)[:1000]
+                        if isinstance(exc, ValueError)
+                        else "A plugin returned an unexpected result. Check it in Plugins, then send the message again."
+                    )
                     db.execute(
                         "UPDATE messages SET status='failed',error=?,finished=? WHERE id=?",
-                        (str(exc), time.time(), row["id"]),
+                        (reason, time.time(), row["id"]),
                     )
                     with db.transaction() as sql:
-                        self.settle_task_status(sql, row["task_id"], "failed", str(exc))
+                        self.settle_task_status(sql, row["task_id"], "failed", reason)
                     return
                 result = await self.request(
                     "POST",
@@ -234,8 +264,7 @@ class Coordinator:
                         "thinkingLevel": row["thinking_level"],
                         "extensions": json.loads(row["extensions"]),
                         "maxTokens": row["max_tokens"],
-                        "instructions": self.core.instructions(row)
-                        + ("\n\nPlugin context:\n" + hook["context"] if hook.get("context") else ""),
+                        "instructions": instructions,
                     },
                 )
                 db.execute(
@@ -319,18 +348,25 @@ class Coordinator:
                         recipient = (
                             task["source"].split(":", 1)[1]
                             if task["source"].startswith("telegram:")
-                            else telegram_owner()
+                            else self.core.telegram.owner()
                         )
                         if send and recipient:
-                            sql.execute(
-                                "INSERT INTO outbox VALUES (?,?,?,'pending',?,?,NULL)",
-                                (
-                                    uid(),
-                                    "telegram",
-                                    packed({"text": answer or error or status, "chat_id": recipient}),
-                                    time.time(),
-                                    row["task_id"],
-                                ),
+                            # Files made since the previous reply ended: a follow-up queued during
+                            # that reply must not claim its files as well.
+                            files = sql.execute(
+                                "SELECT f.id FROM attachments f JOIN actions a ON a.id=f.action_id "
+                                "WHERE f.task_id=? AND a.status='completed' AND f.created>=COALESCE("
+                                "(SELECT MAX(finished) FROM messages WHERE task_id=? AND id<>?),?) "
+                                "ORDER BY f.created,f.id",
+                                (row["task_id"], row["task_id"], row["id"], row["created"]),
+                            ).fetchall()
+                            enqueue(
+                                sql,
+                                answer or error or status,
+                                recipient,
+                                row["task_id"],
+                                markdown=True,
+                                attachments=[file["id"] for file in files],
                             )
 
             if not result.get("active"):
@@ -360,10 +396,11 @@ class Coordinator:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                # Do not log HTTP request bodies or provider credentials.
+                # Do not log HTTP request bodies or provider credentials: the class and where it was raised.
                 self.ready = False
                 self.last_error = type(exc).__name__
-                log.warning("Coordinator retry: %s", self.last_error)
+                frame = traceback.extract_tb(exc.__traceback__)[-1]
+                log.warning("Coordinator retry: %s at %s:%s", self.last_error, frame.name, frame.lineno)
             pending = await asyncio.to_thread(
                 self.core.db.one,
                 "SELECT 1 FROM messages WHERE status IN ('queued','dispatching','running') LIMIT 1",

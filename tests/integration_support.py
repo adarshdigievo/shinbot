@@ -69,7 +69,12 @@ COMPOSE += [
 
 
 def checked(response):
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as error:
+        # The status alone rarely says what went wrong; the service's own reason does.
+        error.add_note(f"Response: {response.text[:800]}")
+        raise
     return response.json()
 
 

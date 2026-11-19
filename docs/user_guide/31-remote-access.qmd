@@ -21,9 +21,25 @@ Set `SHINBOT_ORIGIN` in the host's `~/.shinbot/deploy.env` to the exact public H
 
 The proxy must forward WebSocket connections and avoid buffering event streams. Expose only the gateway. Keep the runtime, Computer, browser and VNC services on private container networks. Do not use an unauthenticated proxy to bypass the gateway's login or origin checks.
 
+Behind a proxy, every visitor reaches the gateway from the proxy's address. Set `SHINBOT_TRUSTED_PROXIES=1` in `deploy.env` so sign-in limits apply to each visitor separately. Your proxy must append the client address to `X-Forwarded-For`, which nginx (`proxy_add_x_forwarded_for`), Caddy and Traefik do by default. Leave it at `0` when browsers can reach the gateway directly, because a client could then choose its own address.
+
 ## Authentication
 
 Browser sessions use HttpOnly cookies and origin checks. CLI sessions use bearer tokens. **Settings → Accounts → Sign out all devices** revokes both kinds of session. A local administrator can read container volumes, so host access remains part of the security boundary.
+
+Wrong passwords are limited to eight a minute for each address. After that, further attempts from that address are answered one at a time, a few seconds apart. The correct password still signs in.
+
+### Change or reset the password
+
+Change your password in **Settings → Accounts**: enter the current password and a new one of 12 to 256 characters. Other browsers and CLI sessions are signed out; the device you used stays signed in.
+
+If you have lost the password, run this on the host where ShinBot is installed:
+
+```sh
+shinbot reset-password
+```
+
+It asks for a new password, replaces the old one and signs out every device. No current password is needed, because access to the host already grants access to the data. Add `--native` for a native macOS installation. The services must be running for a Docker installation.
 
 ## Standing permissions
 

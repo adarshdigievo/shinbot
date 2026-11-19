@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconn
 from playwright.async_api import async_playwright
 
 from ..attachments import FileStore, file_name
-from ..browser_policy import assess
+from ..browser_policy import assess, endpoint, public_destination
 from . import desktop
 from .browser_backends import BACKENDS, catalog, launch
 from .common import Journal, service_auth
@@ -38,6 +38,8 @@ active_browser = "shared"
 active_backend = "chromium"
 backend_driver = None
 lease_touched = 0.0
+# Private or local origins the owner opened or approved in this browser session.
+private_origins = set()
 
 
 def native_view():
@@ -89,6 +91,7 @@ async def close_browser():
     await context.close()
     browser = page = backend_driver = None
     observations.clear()
+    private_origins.clear()
     control_generation += 1
 
 
@@ -133,9 +136,42 @@ async def select_profile(browser_id, backend=None):
     control_generation += 1
 
 
+def origin_key(url):
+    # Host and effective port, so ":80" typed in an approved address matches the page the browser reports.
+    host, port = endpoint(url)
+    return f"{host}:{port}"
+
+
+def owner_pages():
+    # Whatever the owner left open during takeover is theirs to share with the bot.
+    if lease and lease.get("kind") == "human" and browser is not None:
+        private_origins.update(origin_key(p.url) for p in browser.pages)
+
+
+async def withheld():
+    """Blank a private or local page nobody approved, so a redirect cannot hand its content to the model."""
+    url = page.url if page is not None and not page.is_closed() else "about:blank"
+    origin = urlparse(url).netloc.lower()
+    if origin_key(url) in private_origins or await public_destination(url):
+        return None
+    await page.goto("about:blank")
+    return {
+        "isError": True,
+        "content": [
+            {
+                "type": "text",
+                "text": f"The browser ended on {origin}, a private or local network address that was not approved. "
+                "Its content was not read and the page was closed. To use it, open that address with goto; "
+                "the owner is asked first.",
+            }
+        ],
+    }
+
+
 def expire_lease():
     global lease, control_generation
     if lease and not lock.locked() and time.monotonic() - lease_touched > 300:
+        owner_pages()
         lease = None
         desktop.set_owner(None)
         control_generation += 1
@@ -285,6 +321,7 @@ async def release(payload: dict):
     async with lock:
         if lease and lease.get("kind") == "human" and lease.get("owner") != payload.get("owner"):
             raise HTTPException(403, "Only the device controlling the computer can hand it back.")
+        owner_pages()
         lease = None
         desktop.set_owner(None)
         human_pending = False
@@ -530,6 +567,9 @@ async def execute_browser(payload: dict):
             approved = payload.get("approval_context") == review["context"]
             if required and not approved:
                 return {"status": "approval_required", **review}
+            if required:
+                # The owner saw this target, so a private address they approved may be opened and read.
+                private_origins.add(origin_key(review["destination"]))
         prior = journal.claim(payload)
         if prior is not None:
             return prior
@@ -539,6 +579,9 @@ async def execute_browser(payload: dict):
         try:
             if operation == "screenshot":
                 await current_page()
+                if mode != "full" and (blocked := await withheld()):
+                    journal.finish(payload["id"], blocked)
+                    return blocked
                 result = {
                     "file": FileStore(DATA / "attachments").put(
                         await page.screenshot(type="png", timeout=15000),
@@ -561,6 +604,9 @@ async def execute_browser(payload: dict):
                 await backend_driver.execute(page, operation, args)
             else:
                 await perform_action(operation, args, locator)
+            if operation == "back" and mode != "full":
+                # Going back is always the owner's decision outside Full access, wherever it lands.
+                private_origins.add(origin_key(page.url))
         except Exception as error:
             no_connection = {
                 "ERR_NAME_NOT_RESOLVED",
@@ -603,7 +649,9 @@ async def execute_browser(payload: dict):
             }
         journal.finish(payload["id"], result)
         try:
-            result = (
+            # Checked when the page is read, so a delayed or scripted redirect is caught as well.
+            blocked = None if mode == "full" or operation == "tabs" else await withheld()
+            result = blocked or (
                 {"tabs": [{"url": p.url} for p in browser.pages]} if operation == "tabs" else await observe()
             )
             observations[payload["task_id"]] = (control_generation, page.url)

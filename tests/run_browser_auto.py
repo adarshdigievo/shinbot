@@ -29,6 +29,8 @@ async def main():
         core.db.set("preferences", {**core.db.setting("preferences"), "provider": "test", "model": "test"})
         task = core.tasks.create("Search a website")
         os.environ["SHINBOT_EXECUTOR_TOKEN"] = "test-browser-token" * 4
+        # The routed test site has no public address; Auto would otherwise ask before opening it.
+        os.environ["SHINBOT_BROWSER_TRUSTED_HOSTS"] = "search.test"
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch()
             context = await browser.new_context()

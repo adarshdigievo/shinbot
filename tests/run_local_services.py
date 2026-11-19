@@ -94,10 +94,11 @@ with tempfile.TemporaryDirectory(prefix="shinbot-local-") as temporary:
         SHINBOT_BROWSER_URL=urls["browser"],
         SHINBOT_FIXTURE_URL=urls["fixture"] + "/v1",
         SHINBOT_FIXTURE_ORIGIN=urls["fixture"],
+        # Auto mode opens only public addresses unprompted; the fixture site is on this machine.
+        SHINBOT_BROWSER_TRUSTED_HOSTS=urls["fixture"].removeprefix("http://"),
         SHINBOT_SERVICE_TOKEN=tokens["runtime"],
         SHINBOT_COMPUTER_TOKEN=tokens["computer"],
         SHINBOT_BROWSER_TOKEN=tokens["browser"],
-        SHINBOT_CHANNEL_TOKEN=tokens["channel"],
         PYTHONDONTWRITEBYTECODE="1",
     )
     processes = {}

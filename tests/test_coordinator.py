@@ -263,3 +263,111 @@ async def test_cancellation_during_submit_preserves_submission_and_final_usage(a
     await core.coordinator.tick()
     assert core.db.one("SELECT tokens FROM tasks WHERE id=?", (task["id"],))["tokens"] == 30000
     assert not core.db.all("SELECT * FROM pending_aborts")
+
+
+async def test_internal_runtime_errors_are_retried_then_failed_while_holds_wait(application, monkeypatch):
+    import httpx
+
+    core = application.state.core
+    status = {"code": 500}
+
+    async def failing(method, path, **kwargs):
+        if path == "/v1/health":
+            return {"held": False}
+        request = httpx.Request(method, "http://runtime" + path)
+        response = httpx.Response(status["code"], json={"error": "database is locked"}, request=request)
+        raise httpx.HTTPStatusError("runtime failed", request=request, response=response)
+
+    async def reconciled():
+        core.coordinator.ready = True
+
+    monkeypatch.setattr(core.coordinator, "request", failing)
+    monkeypatch.setattr(core.coordinator, "reconcile", reconciled)
+    task = core.tasks.create("Summarise the report")
+    core.coordinator.ready = True
+    await core.coordinator.tick()
+    message = core.db.one("SELECT * FROM messages")
+    assert message["status"] != "failed" and not core.coordinator.ready
+    assert core.coordinator.last_error == "HTTPStatusError"
+    # A runtime that is held or restarting answers 503; that is waited out however long it takes.
+    status["code"] = 503
+    core.coordinator.runtime_errors[message["id"]] = time.monotonic() - 3600
+    core.coordinator.ready = True
+    await core.coordinator.tick()
+    assert core.db.one("SELECT status FROM messages")["status"] != "failed"
+    status["code"] = 500
+    core.coordinator.ready = True
+    await core.coordinator.tick()
+    failed = core.db.one("SELECT status,error FROM messages")
+    assert failed["status"] == "failed" and "kept failing" in failed["error"]
+    assert core.tasks.detail(task["id"])["status"] == "failed"
+    assert message["id"] not in core.coordinator.runtime_errors
+
+
+async def test_stuck_accepted_work_is_stopped_in_the_runtime_too(application, monkeypatch):
+    import httpx
+
+    core = application.state.core
+    fake, broken = Runtime(), {"on": False}
+
+    async def request(method, path, **kwargs):
+        if broken["on"] and path.startswith("/v1/submissions/"):
+            call = httpx.Request(method, "http://runtime" + path)
+            raise httpx.HTTPStatusError(
+                "runtime failed", request=call, response=httpx.Response(500, json={"error": "x"}, request=call)
+            )
+        return await fake(method, path, **kwargs)
+
+    async def reconciled():
+        core.coordinator.ready = True
+
+    monkeypatch.setattr(core.coordinator, "request", request)
+    monkeypatch.setattr(core.coordinator, "reconcile", reconciled)
+    task = core.tasks.create("Long job")
+    await core.coordinator.tick()
+    message = core.db.one("SELECT * FROM messages")
+    assert message["status"] == "running" and message["submission_id"] == 1
+    broken["on"] = True
+    core.coordinator.polls.clear()
+    core.coordinator.runtime_errors[message["id"]] = time.monotonic() - 3600
+    await core.coordinator.tick()
+    assert core.db.one("SELECT status FROM messages")["status"] == "failed"
+    assert core.db.all("SELECT task_id FROM pending_aborts") == [{"task_id": task["id"]}]
+
+
+async def test_a_queued_follow_up_does_not_resend_the_previous_replys_files(application, monkeypatch):
+    core = application.state.core
+    fake = Runtime()
+    monkeypatch.setattr(core.coordinator, "request", fake)
+
+    async def remote(*args, **kwargs):
+        return {}
+
+    monkeypatch.setattr(core, "remote", remote)
+    core.telegram.register(4242, 555)
+    core.telegram.status("connected")
+    task_id = core.telegram.inbound(1, "Make the chart")["task_id"]
+    await core.coordinator.tick()
+    core.telegram.inbound(2, "Then summarise it")
+    # The first reply attaches its file after the follow-up was queued.
+    saved = core.attachments.files.put(b"a,b\n1,2\n", "chart.csv")
+    core.db.execute(
+        "INSERT INTO actions VALUES ('act',?,?,?,?,?,'completed',NULL,NULL,?,?)",
+        (task_id, "e", "attach_file", "{}", "h", time.time(), time.time() + 900),
+    )
+    core.db.execute(
+        "INSERT INTO attachments VALUES ('file','act',?,?,?,?,?,0,?)",
+        (task_id, saved["digest"], "chart.csv", saved["mime_type"], saved["size"], time.time()),
+    )
+    fake.submissions[1] = "done"
+    await core.coordinator.tick()
+    await core.coordinator.tick()
+    fake.submissions[2] = "done"
+    core.coordinator.polls.clear()
+    await core.coordinator.tick()
+    answers = [
+        json.loads(row["body"])
+        for row in core.db.all("SELECT body FROM outbox ORDER BY created,rowid")
+        if json.loads(row["body"]).get("markdown")
+    ]
+    assert [answer["attachments"] for answer in answers] == [["file"], []]

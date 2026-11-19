@@ -68,11 +68,11 @@
     },
     {
       "id": "telegram",
-      "version": "1.1.0",
+      "version": "2.0.0",
       "name": "Telegram",
-      "description": "Chat privately with your ShinBot profiles, switch bots with /bot, and receive complete replies and job results.",
+      "description": "Chat with your bots from a private Telegram chat. Approve actions with a tap, get files and job results, and switch bots with /bots.",
       "path": "plugins/telegram",
-      "sha256": "b20aebb7781574bdebb65087288e4d0ec02e3abf4332b95d31f3177555b04cb6"
+      "sha256": "90c45bf81d544f7742898d429da3e73d3bb63ce0d59b5bfaf23852a24c6d2db0"
     }
   ]
 }

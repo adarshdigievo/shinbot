@@ -107,7 +107,7 @@ def test_compose_fixture_uses_the_isolated_image_repository(tmp_path):
         "SHINBOT_IMAGE=shinbot-dev/shinbot\n"
         + "".join(
             f"SHINBOT_{service}_TOKEN=fixture-only-credential\n"
-            for service in ("SERVICE", "COMPUTER", "BROWSER", "CHANNEL")
+            for service in ("SERVICE", "COMPUTER", "BROWSER")
         )
     )
     result = subprocess.run(
@@ -116,8 +116,6 @@ def test_compose_fixture_uses_the_isolated_image_repository(tmp_path):
             "compose",
             "--env-file",
             str(environment),
-            "--profile",
-            "telegram",
             "-f",
             str(ROOT / "deploy/compose.yaml"),
             "-f",
@@ -134,3 +132,7 @@ def test_compose_fixture_uses_the_isolated_image_repository(tmp_path):
     services = json.loads(result.stdout)["services"]
     assert set(services) == {*release.SERVICES, "fixture"}
     assert all(value["image"].startswith("shinbot-dev/shinbot:") for value in services.values())
+    # Every service reports its own health and rotates its logs.
+    for name in release.SERVICES:
+        assert services[name]["healthcheck"]["test"][0] == "CMD"
+        assert services[name]["logging"]["options"] == {"max-file": "5", "max-size": "10m"}

@@ -20,10 +20,9 @@ import typer
 from packaging.version import Version
 
 from . import __version__
-from .volume_admin import VOLUMES, validate_archive
+from .volume_admin import ENTRY_LIMIT, VOLUMES, validate_archive
 
-SERVICES = ("control", "runtime", "computer", "browser", "telegram")
-CORE = SERVICES[:4]
+SERVICES = CORE = ("control", "runtime", "computer", "browser")
 _ACTIVE_LOCK = None
 
 
@@ -85,9 +84,7 @@ def compose_document(path, configuration):
 
 def configuration(path=None):
     cli = launcher()
-    result = cli.compose(
-        "--profile", "telegram", "config", "--format", "json", capture=True, configuration=path
-    )
+    result = cli.compose("config", "--format", "json", capture=True, configuration=path)
     # Compose emits dollars escaped for reuse as another Compose input, even in JSON.
     # Keep the in-memory snapshot literal; compose_document escapes it exactly once.
     return json.loads(result.stdout.replace("$$", "$"))
@@ -96,7 +93,7 @@ def configuration(path=None):
 def stop_writers():
     cli = launcher()
     available = configuration()["services"]
-    cli.compose("--profile", "telegram", "stop", "-t", "30", *[s for s in SERVICES if s in available])
+    cli.compose("stop", "-t", "30", *[s for s in SERVICES if s in available])
 
 
 def live_release():
@@ -105,7 +102,7 @@ def live_release():
     for service in SERVICES:
         if service not in config["services"]:
             continue
-        result = cli.compose("--profile", "telegram", "ps", "-aq", service, capture=True)
+        result = cli.compose("ps", "-aq", service, capture=True)
         ids = result.stdout.split()
         if not ids:
             if service in CORE:
@@ -150,7 +147,9 @@ def archive_backup(destination, release=None):
     release = release or json.loads((cli.home() / "release.json").read_text())
     with tempfile.TemporaryDirectory(prefix=".shinbot-backup-", dir=destination.parent) as tmp:
         root = Path(tmp)
-        cli.volume_operation("backup", root / "volumes.tar.gz", configuration=release["configuration"])
+        cli.volume_operation(
+            "backup", root / "volumes.tar.gz", configuration=release["configuration"], trusted=True
+        )
         shutil.copyfile(cli.home() / "deploy.env", root / "deploy.env")
         write_json(root / "release.json", release)
         manifest = {
@@ -172,8 +171,45 @@ def archive_backup(destination, release=None):
     return destination
 
 
+def prune_restore_points(keep=5):
+    """Keep the newest automatic restore points and the images retained for them. The checkpoint a
+    rollback still needs, and archives made with shinbot backup, are never removed."""
+    cli = launcher()
+    try:
+        state = cli.home() / "recovery.json"
+        needed = Path(json.loads(state.read_text()).get("backup", "")).name if state.exists() else ""
+        points = sorted(
+            (
+                path
+                for kind in ("update", "restore", "rollback")
+                for path in (cli.home() / "backups").glob(f"before-{kind}-*.tar.gz")
+            ),
+            key=lambda path: (len(path.name.rsplit("-", 1)[1]), path.name.rsplit("-", 1)[1]),
+        )
+        kept = {path.name for path in points[-keep:]} | {needed}
+        for path in points:
+            if path.name not in kept:
+                path.unlink()
+        prefix = f"shinbot-rollback/{cli.deployment().get('SHINBOT_PROJECT', 'shinbot')}-"
+        listed = subprocess.run(
+            [*cli.docker(), "image", "ls", "--format", "{{.Repository}}:{{.Tag}}", "--filter", f"reference={prefix}*"],
+            capture_output=True,
+            text=True,
+        )
+        # Exact repositories only: another installation's project name may begin with this one's.
+        repositories = {prefix + service for service in (*SERVICES, "telegram")}
+        for tag in listed.stdout.split():
+            repository, _, checkpoint = tag.rpartition(":")
+            # A tag carries its checkpoint's filename without the final suffix. Docker refuses to
+            # delete an image a container still uses, so only unneeded old releases free space.
+            if repository in repositories and checkpoint + ".gz" not in kept:
+                subprocess.run([*cli.docker(), "image", "rm", tag], capture_output=True)
+    except (OSError, ValueError, subprocess.SubprocessError, typer.BadParameter):
+        typer.echo("Older restore points were not cleaned up. Remove unneeded files in backups.", err=True)
+
+
 @contextlib.contextmanager
-def unpack(source):
+def unpack(source, limit=ENTRY_LIMIT):
     """Validate all bytes before stopping or overwriting an installation."""
     source = Path(source).resolve()
     with tempfile.TemporaryDirectory(prefix="shinbot-restore-") as tmp:
@@ -181,7 +217,7 @@ def unpack(source):
         with tarfile.open(source, "r:gz") as archive:
             names = archive.getnames()
             if "manifest.json" not in names:
-                members = validate_archive(archive)
+                members = validate_archive(archive, limit)
                 if {Path(m.name).parts[0] for m in members} != VOLUMES:
                     raise ValueError("Backup must contain all five data volumes.")
                 yield source, None, {"format": 1}
@@ -202,7 +238,7 @@ def unpack(source):
             if digest(root / name) != expected:
                 raise ValueError(f"Backup checksum failed for {name}.")
         with tarfile.open(root / "volumes.tar.gz", "r:gz") as archive:
-            members = validate_archive(archive)
+            members = validate_archive(archive, limit)
             if {Path(m.name).parts[0] for m in members} != VOLUMES:
                 raise ValueError("Backup must contain all five data volumes.")
         yield root / "volumes.tar.gz", root, manifest
@@ -219,15 +255,15 @@ def backup(destination):
             archive_backup(destination, release)
         finally:
             if running:
-                cli.compose("--profile", "telegram", "start", *running)
+                cli.compose("start", *running)
     typer.echo(
         f"Saved {destination}. Includes settings, plugins, conversations, files and credentials. Keep it private."
     )
 
 
-def restore(source):
+def restore(source, trusted=False):
     cli = launcher()
-    with locked(), unpack(source) as (volumes, root, manifest):
+    with locked(), unpack(source, None if trusted else ENTRY_LIMIT) as (volumes, root, manifest):
         check_pending()
         release = remember_release()
         running = cli.running_services()
@@ -237,10 +273,10 @@ def restore(source):
             archive_backup(previous, release)
         except BaseException:
             if running:
-                cli.compose("--profile", "telegram", "start", *running)
+                cli.compose("start", *running)
             raise
         try:
-            cli.volume_operation("restore", volumes)
+            cli.volume_operation("restore", volumes, trusted=trusted)
             if root:
                 saved = dict(
                     line.split("=", 1)
@@ -267,9 +303,10 @@ def restore(source):
                 compose_document(cli.home() / "rollback-compose.json", config)
             (cli.home() / "client.json").unlink(missing_ok=True)
             if running:
-                cli.compose("--profile", "telegram", "up", "-d", "--no-build", "--pull", "never", *running)
+                cli.compose("up", "-d", "--no-build", "--pull", "never", *running)
             write_json(cli.home() / "release.json", release)
             (cli.home() / "recovery.json").unlink(missing_ok=True)
+            prune_restore_points()
         except BaseException:
             typer.echo(f"Restore stopped. Services remain stopped. Previous state: {previous}", err=True)
             raise
@@ -310,7 +347,8 @@ def recovery_state():
 
 def rollback_saved(state, timeout):
     cli = launcher()
-    with unpack(state["backup"]) as (volumes, root, _):
+    # The checkpoint is this installation's own archive, whatever its size.
+    with unpack(state["backup"], None) as (volumes, root, _):
         config = state["release"]["configuration"]
         # Validate every retained image before stopping the candidate.
         for name in state["running"]:
@@ -319,12 +357,10 @@ def rollback_saved(state, timeout):
         stop_writers()
         compose_document(cli.home() / "rollback-compose.json", config)
         cli.write_private(cli.home() / "deploy.env", (root / "deploy.env").read_text())
-        cli.volume_operation("restore", volumes)
+        cli.volume_operation("restore", volumes, trusted=True)
         (cli.home() / "client.json").unlink(missing_ok=True)
         if state["running"]:
-            cli.compose(
-                "--profile", "telegram", "up", "-d", "--no-build", "--pull", "never", *state["running"]
-            )
+            cli.compose("up", "-d", "--no-build", "--pull", "never", *state["running"])
         if set(CORE) <= set(state["running"]):
             healthy(timeout)
         write_json(cli.home() / "release.json", state["release"])
@@ -352,8 +388,6 @@ def update(build=False, timeout=120):
         # Download/build first. A failed download leaves the current services untouched.
         try:
             cli.compose(
-                "--profile",
-                "telegram",
                 *(["build"] if build else ["pull", "--policy", "missing"]),
                 *running,
                 configuration=cli.compose_file(),
@@ -380,23 +414,24 @@ def update(build=False, timeout=120):
         try:
             archive_backup(checkpoint, release)
         except BaseException:
-            cli.compose("--profile", "telegram", "start", *running)
+            cli.compose("start", *running)
             raise
         state = {"pending": True, "backup": str(checkpoint), "release": release, "running": running}
         try:
             write_json(cli.home() / "recovery.json", state)
         except BaseException:
-            cli.compose("--profile", "telegram", "start", *running)
+            cli.compose("start", *running)
             raise
         try:
             held = copy.deepcopy(candidate)
             held["services"]["control"]["environment"]["SHINBOT_SAFE_MODE"] = "1"
             compose_document(cli.home() / "rollback-compose.json", held)
-            cli.compose("--profile", "telegram", "up", "-d", "--no-build", "--pull", "never", *running)
+            cli.compose("up", "-d", "--no-build", "--pull", "never", *running)
             healthy(timeout)
             compose_document(cli.home() / "rollback-compose.json", candidate)
-            cli.compose("--profile", "telegram", "up", "-d", "--no-build", "--pull", "never", *running)
+            cli.compose("up", "-d", "--no-build", "--pull", "never", *running)
             healthy(timeout)
+            cli.retire_telegram_service(cli.docker())
             result = live_release()
             write_json(cli.home() / "release.json", result)
             (cli.home() / "rollback-compose.json").unlink()
@@ -418,6 +453,7 @@ def update(build=False, timeout=120):
                 err=True,
             )
             raise typer.Exit(1) from None
+        prune_restore_points()
         typer.echo(
             f"Update healthy. Restore point: {checkpoint}\nRun shinbot rollback to return to that release and its data."
         )
@@ -565,11 +601,12 @@ def rollback(timeout=120):
                 typer.echo(f"Saved current data: {previous}")
             except BaseException:
                 if running:
-                    cli.compose("--profile", "telegram", "start", *running)
+                    cli.compose("start", *running)
                 raise
         state["pending"] = True
         write_json(cli.home() / "recovery.json", state)
         rollback_saved(state, timeout)
+        prune_restore_points()
     typer.echo(
         "Previous release and data restored. Sign in and inspect Recovery in Settings before resuming work."
     )

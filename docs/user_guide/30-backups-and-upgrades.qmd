@@ -77,7 +77,7 @@ The health check verifies service readiness, not every provider or plugin. Test 
 shinbot rollback
 ```
 
-Rollback runs from the host CLI and does not need the web app, a model provider or an Internet connection. It returns to the last update's saved release **and data**. It first backs up work created after a successful update so that you can recover it separately. Older restore points remain in `SHINBOT_HOME/backups`; use `shinbot backup-info` to inspect them.
+Rollback runs from the host CLI and does not need the web app, a model provider or an Internet connection. It returns to the last update's saved release **and data**. It first backs up work created after a successful update so that you can recover it separately. The five most recent automatic restore points remain in `SHINBOT_HOME/backups`; use `shinbot backup-info` to inspect them. After a successful update or rollback, ShinBot removes older ones and the service images kept for them. Archives you create with `shinbot backup` are never removed.
 
 If the host stops during an update, `shinbot start` reports the incomplete operation. Run `shinbot rollback` to finish recovery. If Docker or the disk is unavailable, resolve that problem and retry the same command. The checkpoint stays on disk until recovery completes. Running rollback again after success leaves the restored data alone.
 
@@ -90,6 +90,8 @@ shinbot restore /safe/location/shinbot.tar.gz --replace
 ```
 
 Restore validates the archive before stopping services and saves the current state in `SHINBOT_HOME/backups`. It restores persistent data and plugin settings while preserving this destination's Docker engine, project, ports, public address and service credentials. The archive also contains the original deployment settings for reference; they are not blindly applied to another host.
+
+An archive may hold up to 500,000 files unless you say it is your own: add `--trusted` to restore a larger backup that you made yourself. Backups and automatic restore points made by this installation have no such limit. Pipes, sockets and device files in the workspace are left out of a backup, and the backup lists them.
 
 Restore revokes sessions, pauses schedules and changes the installation's execution identity. Sign in and inspect Recovery in Settings. Stop any old copy of the installation before releasing the recovery hold. Review uncertain actions and re-enable schedules individually. This also applies after an automatic update fallback or a manual rollback.
 

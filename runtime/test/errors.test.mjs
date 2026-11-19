@@ -45,3 +45,15 @@ test('empty or truncated answers cannot be reported as completed work', async ()
   assert.match(answerError([{role:'assistant',stopReason:'stop'}], '  '), /without a reply/);
   assert.equal(answerError([{role:'assistant',stopReason:'stop'}], 'Verified result'), undefined);
 });
+
+test('only deliberate refusals are client errors; anything unexpected is a server error', async () => {
+  const { errorReply, rejected } = await import('../dist/errors.js');
+  assert.deepEqual(errorReply(rejected('Unknown submission.', 404)), {statusCode:404, body:{error:'Unknown submission.'}});
+  assert.equal(errorReply(rejected('Invalid submission.')).statusCode, 400);
+  assert.equal(errorReply(new TypeError("Cannot read properties of undefined (reading 'id')")).statusCode, 500);
+  assert.equal(errorReply(Object.assign(new Error('database is locked'), {code:'ERR_SQLITE_ERROR'})).statusCode, 500);
+  // Fastify's own request errors keep their status.
+  assert.equal(errorReply(Object.assign(new Error('Body too large'), {statusCode:413})).statusCode, 413);
+  assert.equal(errorReply(Object.assign(new Error('odd'), {statusCode:200})).statusCode, 500);
+  assert.equal(errorReply(new Error('x'.repeat(900))).body.error.length, 500);
+});

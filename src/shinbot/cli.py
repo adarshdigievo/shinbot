@@ -181,7 +181,7 @@ def compose_file():
     return Path(__file__).parent / "deployment/compose.yaml"
 
 
-def compose(*args, check=True, capture=False, configuration=None, timeout=None):
+def compose(*args, check=True, capture=False, configuration=None, timeout=None, input=None):
     if not (home() / "deploy.env").exists():
         raise typer.BadParameter("This installation has not been started. Run shinbot start first.")
     result = subprocess.run(
@@ -206,6 +206,7 @@ def compose(*args, check=True, capture=False, configuration=None, timeout=None):
         capture_output=capture,
         text=True,
         timeout=timeout,
+        input=input,
         **maintenance.child_lock(),
     )
     if check and result.returncode:
@@ -219,7 +220,7 @@ def compose(*args, check=True, capture=False, configuration=None, timeout=None):
 @maintenance.guarded
 def start(
     build: bool = False,
-    telegram: bool = False,
+    telegram: bool = typer.Option(False, hidden=True),
     port: int | None = None,
     origin: str | None = None,
     open_browser: bool = True,
@@ -258,7 +259,6 @@ def start(
                 "SHINBOT_SERVICE_TOKEN",
                 "SHINBOT_COMPUTER_TOKEN",
                 "SHINBOT_BROWSER_TOKEN",
-                "SHINBOT_CHANNEL_TOKEN",
             ]
         }
         values.update(
@@ -271,11 +271,8 @@ def start(
         )
     values.update(SHINBOT_DOCKER_CONTEXT=command[2], SHINBOT_DOCKER_ENGINE=docker_engine(command))
     write_private(env, "\n".join(f"{k}={v}" for k, v in values.items()) + "\n")
-    arguments = (
-        (["--profile", "telegram"] if telegram else []) + ["up", "-d"] + (["--build"] if build else [])
-    )
     try:
-        compose(*arguments)
+        compose("up", "-d", *(["--build"] if build else []))
     finally:
         # A partial first start can create usable data even when another service fails.
         configuration = compose("config", "--format", "json", capture=True, check=False)
@@ -285,6 +282,9 @@ def start(
                 values["SHINBOT_INITIALIZED"] = "1"
                 write_private(env, "\n".join(f"{k}={v}" for k, v in values.items()) + "\n")
     maintenance.remember_release()
+    retire_telegram_service(command)
+    if telegram:
+        telegram_moved()
     address = values.get("SHINBOT_ORIGIN", f"http://localhost:{port or 8765}")
     typer.echo(f"ShinBot is starting at {address}.")
     if open_browser:
@@ -326,17 +326,71 @@ def setup_token():
     typer.echo(result.stdout)
 
 
+# Runs beside the gateway's data. Exit 3 carries a message for the owner; anything else is the host's.
+RESET_PASSWORD = """
+import sys
+from shinbot.auth import hash_password
+from shinbot.config import Config
+from shinbot.db import Database, packed
+path = Config().data / 'shinbot.sqlite'
+db = Database(path) if path.is_file() else None
+if db is None or db.setting('password') is None:
+    print('This installation has no owner yet. Run shinbot setup-token and finish setup in the browser.')
+    sys.exit(3)
+encoded = hash_password(sys.stdin.readline().rstrip('\\n'))
+with db.transaction() as sql:
+    sql.execute("UPDATE settings SET value=? WHERE key='password'", (packed(encoded),))
+    sql.execute('DELETE FROM sessions')
+"""
+
+
+@app.command()
+def reset_password(native: bool = False):
+    """Set a new owner password from this host and sign out every device."""
+    from . import native as host
+
+    native = native or (not (home() / "deploy.env").exists() and (host.directory() / "config.json").is_file())
+    password = typer.prompt("New password", hide_input=True, confirmation_prompt=True)
+    if not 12 <= len(password) <= 256 or "\n" in password:
+        raise typer.BadParameter("Use a password between 12 and 256 characters.")
+    # The password travels on standard input, never in a command line or the environment.
+    if native:
+        try:
+            root, config = host.configuration()
+        except ValueError as error:
+            raise typer.BadParameter(str(error)) from None
+        result = subprocess.run(
+            [config["python"], "-c", RESET_PASSWORD],
+            env=host.service_environment(root, config),
+            cwd=root,
+            input=password + "\n",
+            capture_output=True,
+            text=True,
+        )
+    else:
+        result = compose(
+            "exec", "-T", "control", "python", "-c", RESET_PASSWORD, capture=True, check=False, input=password + "\n"
+        )
+    if result.returncode == 3:
+        raise typer.BadParameter(result.stdout.strip())
+    if result.returncode:
+        raise typer.BadParameter(
+            "The password was not changed. Check that ShinBot is running on this host, then try again."
+        )
+    typer.echo("Password reset. Every device was signed out. Sign in with the new password.")
+
+
 @app.command()
 @maintenance.guarded
 def stop():
     """Stop services and preserve their data."""
-    compose("--profile", "telegram", "stop")
+    compose("stop")
 
 
 @app.command()
 def status():
     """Show the local services."""
-    compose("--profile", "telegram", "ps")
+    compose("ps")
 
 
 @app.command()
@@ -590,7 +644,7 @@ def version():
     typer.echo(__version__)
 
 
-def volume_operation(operation, file, configuration=None):
+def volume_operation(operation, file, configuration=None, trusted=False):
     configuration = configuration or json.loads(compose("config", "--format", "json", capture=True).stdout)
     command = [
         *docker(),
@@ -604,6 +658,8 @@ def volume_operation(operation, file, configuration=None):
         f"SHINBOT_BACKUP_UID={os.getuid()}",
         "-e",
         f"SHINBOT_BACKUP_GID={os.getgid()}",
+        # This installation's own archives may hold more files than one from elsewhere.
+        *(["-e", "SHINBOT_BACKUP_TRUSTED=1"] if trusted else []),
     ]
     for key, value in configuration["volumes"].items():
         command += ["--mount", f"type=volume,source={value['name']},target=/volumes/{key}"]
@@ -627,7 +683,9 @@ def backup(destination: Path):
     try:
         maintenance.backup(destination.resolve())
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        raise typer.BadParameter("Backup could not finish. Check disk space and Docker, then retry.") from exc
+        raise typer.BadParameter(
+            "Backup could not finish. Any reason is printed above; otherwise check disk space and Docker."
+        ) from exc
 
 
 @app.command()
@@ -650,15 +708,20 @@ def backup_info(source: Path):
 
 
 @app.command()
-def restore(source: Path, replace: bool = False):
-    """Restore a full backup; preserve this host's address and hold automated work for review."""
+def restore(source: Path, replace: bool = False, trusted: bool = False):
+    """Restore a full backup; preserve this host's address and hold automated work for review.
+
+    Use --trusted for a very large backup that you made yourself."""
     if not replace:
         raise typer.BadParameter(
             "Use --replace to replace this installation's data. A pre-restore backup is saved first."
         )
     try:
-        maintenance.restore(source)
-    except (OSError, ValueError, tarfile.TarError, subprocess.SubprocessError) as exc:
+        maintenance.restore(source, trusted)
+    except ValueError as exc:
+        # Validation messages name what is wrong with the archive and hold no secrets.
+        raise typer.BadParameter(f"Restore could not finish. {exc}") from exc
+    except (OSError, tarfile.TarError, subprocess.SubprocessError) as exc:
         raise typer.BadParameter(
             "Restore could not finish. Check the backup and Docker. See any recovery path printed above."
         ) from exc
@@ -719,91 +782,48 @@ def rollback(timeout: int = typer.Option(120, min=5, max=900)):
 
 
 def running_services():
-    known = {"control", "runtime", "computer", "browser", "telegram"}
-    result = compose("--profile", "telegram", "ps", "--services", "--status", "running", capture=True)
+    known = {"control", "runtime", "computer", "browser"}
+    result = compose("ps", "--services", "--status", "running", capture=True)
     return [name for name in result.stdout.split() if name in known]
 
 
-TELEGRAM_SCAN = """
-from pathlib import Path
-import shinbot
-from shinbot.config import Config
-from shinbot.core import Core
-from shinbot.security import Security
-core = Core(Config())
-root = Path(shinbot.__file__).parent / 'bundled' / 'official' / 'plugins' / 'telegram'
-files = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob('*') if p.is_file() and '__pycache__' not in p.parts}
-Security(core.db).require(files)
-core.plugins.stage(files, marketplace='official')
-print('Telegram security scan completed.')
-"""
-
-
-def telegram_credentials():
-    token = typer.prompt("Telegram bot token", hide_input=True)
-    owner = typer.prompt("Your numeric Telegram user ID")
-    import re
-
-    if not owner.isdigit() or int(owner) <= 0 or not re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]{20,}", token):
-        raise typer.BadParameter("Invalid Telegram credentials.")
-    try:
-        with httpx.Client(timeout=20, follow_redirects=False) as client:
-            result = client.get(f"https://api.telegram.org/bot{token}/getMe").json()
-            webhook = client.get(f"https://api.telegram.org/bot{token}/getWebhookInfo").json()
-        if not result.get("ok"):
-            raise typer.BadParameter(
-                "Telegram rejected this token. Copy the bot token from BotFather and try again."
-            )
-        if not webhook.get("ok") or webhook["result"].get("url"):
-            raise typer.BadParameter(
-                "This bot is using a webhook. Use a separate BotFather bot, or remove its existing webhook first."
-            )
-    except (httpx.HTTPError, ValueError):
-        raise typer.BadParameter(
-            "Could not verify the Telegram connection. Check your network and try again."
-        ) from None
-    return token, owner, result["result"]["username"]
-
-
-@app.command()
-@maintenance.guarded
-def telegram_setup(build: bool = False):
-    """Configure the isolated official Telegram connector."""
-    env = home() / "deploy.env"
-    if not env.exists():
-        raise typer.BadParameter("Run shinbot start first.")
-    token, owner, username = telegram_credentials()
-    # Scan before saving credentials or starting the channel service.
-    compose("exec", "-T", "control", "python", "-c", TELEGRAM_SCAN)
-    lines = [
-        line
-        for line in env.read_text().splitlines()
-        if not line.startswith(("TELEGRAM_BOT_TOKEN=", "TELEGRAM_OWNER_ID="))
-    ]
-    write_private(
-        env, "\n".join([*lines, f"TELEGRAM_BOT_TOKEN={token}", f"TELEGRAM_OWNER_ID={owner}"]) + "\n"
+def telegram_moved():
+    typer.echo(
+        "Telegram now runs inside ShinBot and needs no host setup. "
+        "Open Plugins → Telegram in the web app to connect, change or disable it."
     )
-    restored = home() / "rollback-compose.json"
-    if restored.exists():
-        configuration = json.loads(restored.read_text())
-        for service in ("control", "telegram"):
-            environment = configuration["services"][service].setdefault("environment", {})
-            environment["TELEGRAM_OWNER_ID"] = owner
-            if service == "telegram":
-                environment["TELEGRAM_BOT_TOKEN"] = token
-        # Existing snapshot values are already escaped for Compose. Tokens are validated above.
-        write_private(restored, json.dumps(configuration, indent=2) + "\n")
-    compose("--profile", "telegram", "up", "-d", *(["--build"] if build else []), "control", "telegram")
-    maintenance.remember_release()
-    typer.echo(f"Telegram enabled. Open https://t.me/{username} and send /start, then /bots.")
 
 
-@app.command()
-@maintenance.guarded
+def retire_telegram_service(command):
+    """Remove the separate Telegram container that releases before the in-app connector started."""
+    project = deployment().get("SHINBOT_PROJECT", "shinbot")
+    found = subprocess.run(
+        [
+            *command,
+            "ps",
+            "-aq",
+            "--filter",
+            f"label=com.docker.compose.project={project}",
+            "--filter",
+            "label=com.docker.compose.service=telegram",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if found.returncode == 0 and found.stdout.split():
+        subprocess.run([*command, "rm", "-f", *found.stdout.split()], capture_output=True)
+
+
+@app.command(hidden=True)
+def telegram_setup():
+    """Telegram is now connected from the web app."""
+    telegram_moved()
+
+
+@app.command(hidden=True)
 def telegram_stop():
-    """Stop the Telegram connector without deleting its settings or conversations."""
-    compose("--profile", "telegram", "stop", "telegram")
-    typer.echo("Telegram stopped. Run shinbot telegram-setup to reconnect.")
+    """Telegram is now disabled from the web app."""
+    telegram_moved()
 
 
 @bots_app.command("list")

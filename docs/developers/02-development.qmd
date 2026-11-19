@@ -11,7 +11,7 @@ Use Python 3.13 or newer, uv, Node.js 22 and Docker Compose. CI pins exact tool 
 ```sh
 git clone https://github.com/adarshdigievo/shinbot.git
 cd shinbot
-uv sync --frozen --extra computer --extra security --extra telegram
+uv sync --frozen --extra computer --extra security
 npm --prefix runtime ci --ignore-scripts
 npm --prefix computer ci --ignore-scripts
 npm --prefix runtime run build
@@ -27,7 +27,7 @@ This starts a real installation. For disposable development and testing, use the
 
 ```sh
 uv run --frozen ruff check src tests scripts
-uv run --frozen --extra computer --extra security --extra telegram pytest -n auto
+uv run --frozen --extra computer --extra security pytest -n auto
 npm --prefix runtime run build
 npm --prefix runtime test
 npm --prefix runtime audit --audit-level=low
@@ -74,7 +74,7 @@ Build the images from the checkout, then run the isolated journeys:
 
 ```sh
 version=$(uv run --frozen python -c 'from shinbot import __version__; print(__version__)')
-for service in control runtime computer browser telegram; do
+for service in control runtime computer browser; do
   docker build --file deploy/Dockerfile --target "$service" \
     --tag "shinbot-dev/shinbot:$version-$service" .
 done
@@ -85,7 +85,9 @@ The runner creates a temporary home, a unique Compose project and a separate loc
 
 Use `--only ui` or `--only reinstall` to run one journey. `--prepare-only` leaves an isolated app available for manual testing and prints its URL and cleanup command. Individual journey scripts require the runner's context and reject the default personal project and port.
 
-These builds use `shinbot-dev/shinbot` tags, separate from the published image tags a personal installation uses. The test runner saves that image repository in its isolated deployment. Use `--image-repository NAME` if you built a different local image set. CI builds the same targets, all at once, in its `Container integration` jobs, and splits the journeys into four groups that run side by side.
+These builds use `shinbot-dev/shinbot` tags, separate from the published image tags a personal installation uses. The test runner saves that image repository in its isolated deployment. Use `--image-repository NAME` if you built a different local image set. CI builds the same targets, all at once, in its `Container integration` jobs, and splits the journeys into five groups that run side by side. A separate job builds the `desktop` target, which no journey runs.
+
+The browser image downloads Camoufox, whose release list comes from the GitHub API. If the build stops with "Camoufox was not installed", GitHub has rate-limited anonymous requests from your address. Wait and retry, or let the build authenticate by adding `--secret id=github_token,env=GITHUB_TOKEN` to `docker build` with a token in that variable. CI and the release workflow do this.
 
 ## Build the website
 

@@ -146,7 +146,11 @@ def main():
             print(f"RUN {journey}", flush=True)
             name, _, part = journey.partition(":")
             script = [sys.executable, str(ROOT / "tests" / f"run_{name}.py"), *([part] if part else [])]
-            subprocess.run(script, cwd=ROOT, env=env, check=True)
+            if subprocess.run(script, cwd=ROOT, env=env).returncode:
+                # Show what the services saw before the deployment is removed.
+                print(f"FAIL {journey}: recent service logs follow", flush=True)
+                subprocess.run([*COMPOSE, "logs", "--no-color", "--tail", "60"], env=env)
+                raise SystemExit(1)
             print(f"PASS {journey} ({time.monotonic() - started:.1f}s)", flush=True)
     finally:
         if keep:

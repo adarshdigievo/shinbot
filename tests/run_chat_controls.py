@@ -83,6 +83,9 @@ def main():
                 page.get_by_role("searchbox", name="Search models").press("Escape")
                 expect(page.get_by_role("button", name="Choose model", exact=True)).to_be_focused()
                 page.get_by_label("Approval mode", exact=True).select_option("full")
+                # Full access is confirmed before it applies.
+                page.get_by_role("button", name="Use full access", exact=True).click()
+                expect(page.get_by_label("Approval mode", exact=True)).to_have_value("full")
                 page.get_by_role("button", name="Send", exact=True).click()
                 expect(page.locator("#task-title")).to_have_text(
                     "Check the repository and explain the results."
@@ -135,7 +138,7 @@ def main():
                 expect(page.locator(".approval")).to_contain_text("This action can change files")
                 page.screenshot(path=str(OUT / "auto-approval-light.png"), full_page=True)
                 page.get_by_role("button", name="Decline", exact=True).click()
-                expect(page.locator(f'[data-entry="action-{request["id"]}"]')).to_contain_text("denied")
+                expect(page.locator(f'[data-entry="action-{request["id"]}"]')).to_contain_text("Declined")
                 page.get_by_role("button", name="Choose model", exact=True).click()
                 page.get_by_role("searchbox", name="Search models").fill("deep")
                 page.get_by_role("button", name="Deep model Connected provider").click()

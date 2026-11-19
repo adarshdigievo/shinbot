@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 from .db import uid
+from .errors import Conflict
 
 
 class Notebook:
@@ -29,14 +30,19 @@ class Notebook:
         temp.replace(path)
 
     def save(self, title, body, note_id=None, revision=None):
-        if not title.strip() or len(title) > 200 or len(body) > 200000:
+        if (
+            not all(isinstance(value, str) for value in (title, body))
+            or not title.strip()
+            or len(title) > 200
+            or len(body) > 200000
+        ):
             raise ValueError("A note needs a title and at most 200,000 characters.")
         note_id = note_id or uid()
         self.valid_id(note_id)
         with self.db.transaction() as db:
             old = db.execute("SELECT revision FROM notes WHERE id=?", (note_id,)).fetchone()
             if old and old["revision"] != revision:
-                raise ValueError("This note changed. Reload it before saving.")
+                raise Conflict("This note changed. Reload it before saving.")
             version = old["revision"] + 1 if old else 1
             db.execute(
                 "INSERT INTO notes VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
@@ -68,7 +74,7 @@ class Notebook:
         (self.directory / f"{note_id}.md").unlink(missing_ok=True)
 
     def remember(self, text, source="owner", bot_id="default"):
-        if not text.strip() or len(text) > 4000:
+        if not isinstance(text, str) or not text.strip() or len(text) > 4000:
             raise ValueError("Memory must contain 1–4,000 characters.")
         fingerprint = hashlib.sha256(text.strip().casefold().encode()).hexdigest()
         if source != "owner" and self.db.one(

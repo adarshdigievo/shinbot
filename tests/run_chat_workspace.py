@@ -250,7 +250,8 @@ def main():
                 expect(page.locator(".working")).to_have_count(0)
                 expect(page.locator("[data-inspector-current]")).to_have_text("Reply ready")
                 page.reload()
-                expect(page.locator("#new-bot")).to_be_visible()
+                # A reload reopens the same conversation.
+                expect(page.locator("#task-title")).to_be_visible()
                 page.get_by_role("button", name="Open navigation").click()
                 page.locator(f'[data-task="{key}"]').click()
                 expect(page.locator("#chat-inspector")).to_be_hidden()

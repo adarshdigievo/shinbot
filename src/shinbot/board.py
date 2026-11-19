@@ -3,6 +3,7 @@
 import time
 
 from .db import uid
+from .errors import Conflict, NotFound
 
 STATES = {"backlog", "ready", "running", "review", "done", "blocked"}
 
@@ -29,7 +30,7 @@ class Board:
     def get(self, key, bot_id=None):
         row = self.db.one("SELECT * FROM work_cards WHERE id=?", (key,))
         if not row or (bot_id and row["bot_id"] != bot_id):
-            raise ValueError("Work card not found for this bot.")
+            raise NotFound("Work card not found for this bot.")
         return row
 
     def save(self, data, key=None, bot_id=None):
@@ -71,7 +72,7 @@ class Board:
                     ),
                 ).rowcount
                 if not changed:
-                    raise ValueError("This card changed. Reload it before saving.")
+                    raise Conflict("This card changed. Reload it before saving.")
             else:
                 sql.execute(
                     "INSERT INTO work_cards(id,title,goal,bot_id,max_runs,max_tokens,auto_continue,created,updated) VALUES (?,?,?,?,?,?,?,?,?)",
@@ -106,7 +107,7 @@ class Board:
                 (status, time.time(), key, revision),
             ).rowcount
             if not changed:
-                raise ValueError("This card changed. Reload it before moving it.")
+                raise Conflict("This card changed. Reload it before moving it.")
             if old["status"] == "running":
                 # Fence dispatch before the asynchronous runtime/executor cancellation.
                 sql.execute(

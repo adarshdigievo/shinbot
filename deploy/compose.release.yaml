@@ -1,32 +1,54 @@
 name: shinbot
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: "5"}
 services:
   control:
     image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-control
     init: true
     restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,json,urllib.request as u;assert json.load(u.urlopen(u.Request('http://127.0.0.1:8765/health'),timeout=3))['ok']"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     ports: ["${SHINBOT_BIND:-127.0.0.1}:${SHINBOT_PORT:-8765}:8765"]
     environment:
       SHINBOT_ORIGIN: ${SHINBOT_ORIGIN:-http://localhost:8765}
       SHINBOT_SERVICE_TOKEN: ${SHINBOT_SERVICE_TOKEN:?Run shinbot start to create service credentials}
       SHINBOT_COMPUTER_TOKEN: ${SHINBOT_COMPUTER_TOKEN:?Missing computer credential}
       SHINBOT_BROWSER_TOKEN: ${SHINBOT_BROWSER_TOKEN:?Missing browser credential}
-      SHINBOT_CHANNEL_TOKEN: ${SHINBOT_CHANNEL_TOKEN:?Missing channel credential}
       SHINBOT_RUNTIME_URL: http://runtime:8081
       SHINBOT_COMPUTER_URL: http://computer:8082
       SHINBOT_BROWSER_URL: http://browser:8083
       SHINBOT_SAFE_MODE: ${SHINBOT_SAFE_MODE:-0}
+      SHINBOT_TRUSTED_PROXIES: ${SHINBOT_TRUSTED_PROXIES:-0}
+      SHINBOT_TELEGRAM_API_URL: ${SHINBOT_TELEGRAM_API_URL:-https://api.telegram.org}
+      # Read once, to carry over a Telegram connection that was set up on the host with the old connector.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_OWNER_ID: ${TELEGRAM_OWNER_ID:-}
     volumes: ["control-data:/data"]
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
-    networks: [runtime-net, computer-net, browser-net, channel-net]
+    networks: [runtime-net, computer-net, browser-net]
   runtime:
     image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-runtime
     init: true
     restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/v1/health',{headers:{Authorization:'Bearer '+process.env.SHINBOT_SERVICE_TOKEN}}).then(r=>r.json()).then(j=>process.exit(j.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     environment:
       SHINBOT_SERVICE_TOKEN: ${SHINBOT_SERVICE_TOKEN}
       SHINBOT_CONTROL_URL: http://control:8765
+      SHINBOT_MODEL_RETRIES: ${SHINBOT_MODEL_RETRIES:-240}
+      SHINBOT_MODEL_IDLE_MS: ${SHINBOT_MODEL_IDLE_MS:-60000}
     volumes: ["runtime-data:/data"]
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
@@ -36,6 +58,13 @@ services:
     image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-computer
     init: true
     restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,json,urllib.request as u;assert json.load(u.urlopen(u.Request('http://127.0.0.1:8082/health',headers={'Authorization':'Bearer '+os.environ['SHINBOT_EXECUTOR_TOKEN']}),timeout=3))['ok']"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     environment:
       SHINBOT_EXECUTOR_TOKEN: ${SHINBOT_COMPUTER_TOKEN}
     volumes: ["computer-data:/data", "workspace:/workspace"]
@@ -49,27 +78,22 @@ services:
     image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-browser
     init: true
     restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,json,urllib.request as u;assert json.load(u.urlopen(u.Request('http://127.0.0.1:8083/health',headers={'Authorization':'Bearer '+os.environ['SHINBOT_EXECUTOR_TOKEN']}),timeout=3))['ok']"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     environment:
       SHINBOT_EXECUTOR_TOKEN: ${SHINBOT_BROWSER_TOKEN}
+      SHINBOT_BROWSER_TRUSTED_HOSTS: ${SHINBOT_BROWSER_TRUSTED_HOSTS:-}
     volumes: ["browser-data:/data"]
     shm_size: 1gb
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
-    pids_limit: 256
+    pids_limit: 1024
     networks: [browser-net]
-  telegram:
-    profiles: [telegram]
-    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-telegram
-    init: true
-    restart: unless-stopped
-    environment:
-      SHINBOT_CONTROL_URL: http://control:8765
-      SHINBOT_CHANNEL_TOKEN: ${SHINBOT_CHANNEL_TOKEN}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_OWNER_ID: ${TELEGRAM_OWNER_ID:-}
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
-    networks: [channel-net]
 volumes:
   control-data:
   runtime-data:
@@ -80,4 +104,3 @@ networks:
   runtime-net:
   computer-net:
   browser-net:
-  channel-net:

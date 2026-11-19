@@ -53,7 +53,6 @@ with tempfile.TemporaryDirectory(prefix="shinbot-chat-queue-") as directory:
         SHINBOT_SERVICE_TOKEN=secrets.token_urlsafe(32),
         SHINBOT_COMPUTER_TOKEN=secrets.token_urlsafe(32),
         SHINBOT_BROWSER_TOKEN=secrets.token_urlsafe(32),
-        SHINBOT_CHANNEL_TOKEN=secrets.token_urlsafe(32),
         SHINBOT_FIXTURE_URL=urls["fixture"] + "/v1",
     )
     (data / "runtime").mkdir()

@@ -83,6 +83,10 @@ CREATE TABLE IF NOT EXISTS plugins(id TEXT NOT NULL,version TEXT NOT NULL,digest
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,
  title TEXT NOT NULL,task_id TEXT,created REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS notification_reads(id TEXT PRIMARY KEY,revision TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS actions_task ON actions(task_id,created);
+CREATE INDEX IF NOT EXISTS actions_status ON actions(status);
+CREATE INDEX IF NOT EXISTS events_task ON events(task_id,created);
+CREATE INDEX IF NOT EXISTS usage_ledger_created ON usage_ledger(created);
 CREATE TABLE IF NOT EXISTS channel_updates(channel TEXT NOT NULL,update_id TEXT NOT NULL,task_id TEXT NOT NULL,
  PRIMARY KEY(channel,update_id));
 CREATE TABLE IF NOT EXISTS channel_chats(channel TEXT NOT NULL,chat_id TEXT NOT NULL,task_id TEXT NOT NULL,

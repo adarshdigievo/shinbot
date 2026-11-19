@@ -1,12 +1,11 @@
 import {projectTabs, bindProjectTabs} from './project-tabs.js';
 
-export function projectsView({api, state, $, escape, icon, badge, dialog, field, bind, action, toast, navigate, pageScope, inbox}) {
+export function projectsView({api, state, $, escape, icon, badge, dialog, confirm, field, bind, action, toast, navigate, pageScope, inbox}) {
   let selectedProject = null, selectedWorkspace = null, renderVersion = 0, mode = "coding";
 
   async function openChat(task) {
     state.task = task.id;
     state.bot = task.bot_id || state.bot;
-    $('#active-bot').value = state.bot;
     await navigate('chat');
   }
 
@@ -87,7 +86,7 @@ export function projectsView({api, state, $, escape, icon, badge, dialog, field,
       <label>Bot<select name="bot_id">${state.bots.map(b => `<option value="${escape(b.id)}" ${b.id === state.bot ? 'selected' : ''}>${escape(b.name)}</option>`).join('')}</select></label>
       <label>What should the bot do?<textarea name="prompt" rows="5" required maxlength="20000" placeholder="Describe the change and how to check it."></textarea></label>
       <p class="hint">Creates a branch and worktree from the repository’s committed HEAD. The bot follows your current approval settings. You can start more tasks while this one runs.</p>
-      <div class="form-footer"><button type="submit" class="primary">Create worktree and start</button></div></form>`);
+      <div class="form-footer"><button type="submit" class="primary">Create worktree and start</button></div></form>`, {guard: true});
     let submitted = null;
     bind(d.querySelector('form'), async values => {
       // A failed response keeps the same request and input, so retry cannot create a second task.
@@ -145,16 +144,16 @@ export function projectsView({api, state, $, escape, icon, badge, dialog, field,
         $('#worktree-file-content').hidden = false; $('#worktree-file-content').textContent = result.text;
       }));
     }
-    action($('#archive-workspace'), () => {
-      const d = dialog('Archive this worktree?', `<p>The branch and conversation stay available. ShinBot will refuse to remove files with changes, including untracked or ignored files.</p><button id="confirm-archive">Archive worktree</button>`);
-      action(d.querySelector('#confirm-archive'), async () => {await api(`/api/project-workspaces/${workspace.id}/archive`, 'POST', {}); d.close(); selectedWorkspace = null; await render();});
+    action($('#archive-workspace'), async () => {
+      if (!await confirm({title: 'Archive this worktree?', body: 'The branch and conversation stay available. ShinBot will refuse to remove files with changes, including untracked or ignored files.', confirm: 'Archive worktree'})) return;
+      await api(`/api/project-workspaces/${workspace.id}/archive`, 'POST', {}); selectedWorkspace = null; await render();
     });
   }
   function update(tasks){
     if(state.view!=='projects')return;
     document.querySelectorAll('[data-project-task]').forEach(el=>{
       const task=tasks.find(t=>t.id===el.dataset.projectTask),pill=el.querySelector('.pill');
-      if(task&&pill&&!['archived','archiving','preparing'].includes(pill.textContent)){pill.textContent=task.status;pill.className='pill '+task.status;}
+      if(task&&pill&&!['archived','archiving','preparing'].includes(pill.dataset.status)&&pill.dataset.status!==task.status)pill.outerHTML=badge(task.status);
     });
   }
   async function openInbox(itemId) {

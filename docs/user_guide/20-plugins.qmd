@@ -97,7 +97,7 @@ Use **Disconnect account** to remove ShinBot's saved Google tokens. You can also
 
 ## Enter and manage secrets
 
-Open **Settings → Secrets** to find credential forms for installed plugins and native connections. Fields are masked, saved values are not returned to the browser, and secrets are not inserted into conversations. Leave a saved password field blank to keep its value; use its remove control to delete it.
+Open **Settings → Credentials** to find credential forms for installed plugins and native connections. Fields are masked, saved values are not returned to the browser, and secrets are not inserted into conversations. Leave a saved password field blank to keep its value; use its remove control to delete it.
 
 Integration and plugin settings are encrypted with authenticated encryption in the control service's private `secrets` directory. Existing plugin-setting files migrate when they are next opened or used. Back up the vault together with its key. A missing key stops decryption instead of creating a replacement. The vault and key are included in full installation backups, so those backups must remain private. Encryption does not protect against someone who controls the server or has both the vault and key.
 
@@ -203,7 +203,7 @@ A saved token stays unchanged when its field is left blank. Use **Remove saved G
 
 ## Telegram plugin
 
-The optional official [Telegram plugin](telegram.html) lets you chat with your bots from Telegram. Follow its setup guide to connect a BotFather bot and your private chat.
+The optional official [Telegram plugin](telegram.html) lets you chat with your bots from Telegram, approve actions with a tap and receive files. Install it here, paste a BotFather token and enable it.
 
 ## Ask ShinBot to extend itself
 

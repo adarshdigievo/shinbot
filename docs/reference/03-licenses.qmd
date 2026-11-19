@@ -10,7 +10,7 @@ ShinBot is distributed under the [MIT license](https://github.com/adarshdigievo/
 
 The Python and JavaScript lockfiles record the selected dependency graphs. `computer/package-lock.json` pins Skills CLI 1.7.2 and its dependencies under MIT, ISC and [Blue Oak Model License 1.0.0](https://blueoakcouncil.org/license/1.0.0). Their notices remain in the Computer image. Installed skills and user-configured MCP servers have separate licenses that must be reviewed before use. Pi Durable, Pi AI, Chord, FastAPI, MCP and Playwright use permissive licenses. Lucide icons are distributed with their ISC and MIT notices. DOMPurify provides Apache-2.0 as a license choice.
 
-Reviewed open-source exceptions include **noVNC and certifi under MPL-2.0**, and the optional **python-telegram-bot connector under LGPL-3.0**. Their notice, source and applicable relinking obligations continue to apply. An MIT license on ShinBot does not replace upstream licenses.
+Reviewed open-source exceptions include **noVNC and certifi under MPL-2.0**. Their notice and source obligations continue to apply. An MIT license on ShinBot does not replace upstream licenses.
 
 The bundled standard-license fingerprints record their SPDX source revision in `src/shinbot/bundled/license-hashes.json`. Unknown or modified texts need review; matching a notice does not establish the license of every file.
 

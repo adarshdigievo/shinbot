@@ -226,8 +226,6 @@ def test_official_packages_ship_and_bundled_catalog_updates(application):
         assert staged["status"] == "staged"
         source = ROOT / "marketplaces/official" / entry["path"]
         assert validate_package(package(source))[1] == staged["digest"]
-    with pytest.raises(ValueError, match="telegram-stop"):
-        core.plugins.disable("telegram")
     core.db.execute(
         "UPDATE marketplaces SET catalog='{}',revision='bundled-old' WHERE id=?", (catalog["id"],)
     )

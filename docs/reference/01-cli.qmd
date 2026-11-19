@@ -14,6 +14,7 @@ Run `shinbot --help` for the installed command list. Each command and group acce
 | `shinbot start --no-open-browser` | Start on a headless host |
 | `shinbot start --build` | Build service images from a source checkout |
 | `shinbot setup-token` | Print the unclaimed installation's one-time setup token |
+| `shinbot reset-password` | Set a new owner password from the host and sign out every device; add `--native` for a native installation |
 | `shinbot status` | Show Compose service status |
 | `shinbot doctor` | Check the gateway and connected services |
 | `shinbot stop` | Stop services while keeping data volumes |
@@ -24,7 +25,7 @@ Run `shinbot --help` for the installed command list. Each command and group acce
 | `shinbot update` | Apply the installed package’s release with a restore point and health checks |
 | `shinbot update --build` | Build and apply a source release with the same recovery checks |
 | `shinbot rollback` | Restore the previous release and its data after an update |
-| `shinbot restore PATH --replace` | Back up existing data and restore an archive under a recovery hold |
+| `shinbot restore PATH --replace` | Back up existing data and restore an archive under a recovery hold; add `--trusted` for a very large backup you made yourself |
 | `shinbot version` | Print the package version |
 
 ## Conversations and notes
@@ -74,12 +75,7 @@ The marketplace command accepts `--ref` when a specific repository ref is needed
 
 ### Optional Telegram plugin
 
-Use these commands to set up or stop the [official Telegram plugin](../user-guide/telegram.html):
-
-```sh
-shinbot telegram-setup
-shinbot telegram-stop
-```
+The [official Telegram plugin](../user-guide/telegram.html) is connected, changed and disabled in the web app under **Plugins**. It has no host commands. `shinbot telegram-setup` and `shinbot telegram-stop` from earlier releases remain only to point there.
 
 ## MCP connections and skills
 

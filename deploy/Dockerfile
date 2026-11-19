@@ -19,9 +19,10 @@ COPY --from=assets /build/runtime/dist ./dist
 RUN mkdir /data && chown node:node /data
 USER node
 ENV SHINBOT_RUNTIME_DATA=/data
-CMD ["flock", "-n", "/data/runtime.lock", "node", "dist/server.js"]
+# -F keeps node as the process that receives the stop signal, so it can close cleanly.
+CMD ["flock", "-n", "-F", "/data/runtime.lock", "node", "dist/server.js"]
 
-FROM python:3.13-slim-bookworm AS python-base
+FROM python:3.13.12-slim-bookworm AS python-base
 COPY --from=ghcr.io/astral-sh/uv:0.11.2 /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
@@ -65,7 +66,14 @@ FROM python-base AS browser
 ENV XDG_CACHE_HOME=/opt/browser-cache PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 COPY --from=browser-tools /opt/shinbot-browser /opt/venv/share/shinbot/browser
 RUN uv sync --frozen --no-install-project --no-dev --extra browser && playwright install --with-deps chromium && apt-get update && apt-get install -y --no-install-recommends xvfb tigervnc-scraping-server tigervnc-tools websockify && rm -rf /var/lib/apt/lists/* && groupadd -g 1000 browser && useradd -u 1000 -g browser -m browser && mkdir /data && chown browser:browser /data && chmod -R a+rX /opt/playwright
-RUN playwright install-deps firefox && python -m camoufox fetch official/stable/156.0.1-beta.36 && chmod -R a+rX /opt/browser-cache && chown -R browser:browser /opt/browser-cache
+# Camoufox lists its releases through the GitHub API, which rate-limits anonymous requests, and its
+# fetch command exits 0 even when that fails. Use a token when the build supplies one, and stop the
+# build unless the browser is really there: an image without it only fails later, when it is opened.
+COPY deploy/check-camoufox.py /tmp/check-camoufox.py
+RUN --mount=type=secret,id=github_token playwright install-deps firefox \
+    && GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" python -m camoufox fetch official/stable/156.0.1-beta.36 \
+    && python /tmp/check-camoufox.py \
+    && chmod -R a+rX /opt/browser-cache && chown -R browser:browser /opt/browser-cache
 COPY src ./src
 COPY README.md LICENSE ./
 RUN uv sync --frozen --no-dev --extra browser
@@ -90,11 +98,3 @@ COPY deploy/shinbot-browser-helper.desktop /usr/share/xfce4/helpers/shinbot-brow
 RUN chmod 755 /usr/local/bin/shinbot-desktop-browser /usr/local/bin/shinbot-open-browser && sed -i 's/^WebBrowser=.*/WebBrowser=shinbot-browser/' /etc/xdg/xfce4/helpers.rc && printf '[Default Applications]\nx-scheme-handler/http=shinbot-browser.desktop\nx-scheme-handler/https=shinbot-browser.desktop\n' > /etc/xdg/mimeapps.list && update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/shinbot-open-browser 100
 ENV SHINBOT_DESKTOP=1 SHINBOT_DESKTOP_STATE=/run/shinbot-desktop SHINBOT_BROWSER_DATA=/data/browser SHINBOT_EXECUTOR_DATA=/data/computer SHINBOT_WORKSPACE=/workspace
 CMD ["python", "-m", "shinbot.services.desktop_runner"]
-
-FROM python-base AS telegram
-RUN uv sync --frozen --no-install-project --no-dev --extra telegram && groupadd -g 1000 shinbot && useradd -u 1000 -g shinbot -m shinbot
-COPY src ./src
-COPY README.md LICENSE ./
-RUN uv sync --frozen --no-dev --extra telegram
-USER shinbot
-CMD ["python", "-m", "shinbot.services.telegram"]
