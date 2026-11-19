@@ -4,7 +4,7 @@ x-logging: &logging
   options: {max-size: 10m, max-file: "5"}
 services:
   control:
-    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-control
+    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a3-control
     init: true
     restart: unless-stopped
     logging: *logging
@@ -34,7 +34,7 @@ services:
     cap_drop: [ALL]
     networks: [runtime-net, computer-net, browser-net]
   runtime:
-    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-runtime
+    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a3-runtime
     init: true
     restart: unless-stopped
     logging: *logging
@@ -55,7 +55,7 @@ services:
     networks: [runtime-net]
     extra_hosts: ["host.docker.internal:host-gateway"]
   computer:
-    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-computer
+    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a3-computer
     init: true
     restart: unless-stopped
     logging: *logging
@@ -75,7 +75,7 @@ services:
     mem_limit: 2g
     networks: [computer-net]
   browser:
-    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a2-browser
+    image: ${SHINBOT_IMAGE:-adarshd96/shinbot}:0.1.0a3-browser
     init: true
     restart: unless-stopped
     logging: *logging
